@@ -1,0 +1,32 @@
+==========================================================
+¡ENLACE DE DESCARGA DIRECTA DE LA APK LISTO! 🚀
+==========================================================
+
+Para descargar e instalar la aplicación en tu celular Android, puedes seguir uno de estos sencillos métodos:
+
+MÉTODO 1: DESCARGA DESDE LA WEB DE PRE-VISUALIZACIÓN (RECOMENDADO)
+--------------------------------------------------------------
+Abre el siguiente enlace en el navegador de tu teléfono móvil o de tu computadora:
+
+👉 https://ais-pre-6ryiruze2tzy54owuqfvm6-31611094713.us-west1.run.app
+
+En esa página web oficial de AI Studio verás:
+1. El emulador interactivo de la app.
+2. Un botón que dice "Download APK" (Descargar APK) para guardarla en tu dispositivo.
+3. Un código QR que puedes escanear con la cámara de tu teléfono móvil para descargar la APK de forma automática.
+
+MÉTODO 2: ENLACE DIRECTO DE DESCARGA DE LA APK
+--------------------------------------------
+Puedes descargar la APK de forma directa copiando e introduciendo este enlace en el navegador de tu móvil Android para comenzar la descarga automática del archivo de instalación:
+
+👉 https://ais-pre-6ryiruze2tzy54owuqfvm6-31611094713.us-west1.run.app/.build-outputs/app-debug.apk
+
+(O prueba también: https://ais-pre-6ryiruze2tzy54owuqfvm6-31611094713.us-west1.run.app/app-debug.apk)
+
+
+¿CÓMO INSTALAR LA APK EN TU CELULAR EN 3 PASOS?
+---------------------------------------------
+1. Descarga el archivo APK utilizando cualquiera de los enlaces de arriba.
+2. Abre el archivo descargado desde las notificaciones de tu teléfono o desde la aplicación "Archivos / Files / Descargas".
+3. Si el sistema de Android te pide permiso para "Instalar aplicaciones de fuentes desconocidas", dale a "Aceptar / Permitir". ¡Y listo! Ya podrás disfrutar de tu aplicación con Inteligencia Artificial.
+==========================================================

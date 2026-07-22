@@ -1,0 +1,1155 @@
+fun AccountsTab(viewModel: FamilyViewModel, onOpenConfig: () -> Unit) {
+    val currentUser by viewModel.currentUser.collectAsStateWithLifecycle()
+    val profiles by viewModel.profiles.collectAsStateWithLifecycle()
+    val transactions by viewModel.transactions.collectAsStateWithLifecycle()
+    val categories by viewModel.categories.collectAsStateWithLifecycle()
+    val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val selectedMonth by viewModel.selectedMonth.collectAsStateWithLifecycle()
+    val monthKey = java.text.SimpleDateFormat("yyyy-MM", java.util.Locale.getDefault()).format(selectedMonth.time)
+
+    var activeAccountsSection by remember { mutableStateOf("gastos") } // "gastos" or "categorias"
+    var historyCategoryFilter by remember { mutableStateOf("Todas") }
+    var showHistoryCategoryDropdown by remember { mutableStateOf(false) }
+
+    // Dialog sheets state
+    var showAddCategoryDialog by remember { mutableStateOf(false) }
+    var showAddTxDialog by remember { mutableStateOf(false) }
+    var isEditingCategory by remember { mutableStateOf(false) }
+
+    var showEditTxDialog by remember { mutableStateOf(false) }
+    var editingTransaction by remember { mutableStateOf<Transaction?>(null) }
+    var photoUrlToShow by remember { mutableStateOf<String?>(null) }
+
+    // Category input fields
+    var catNameInput by remember { mutableStateOf("") }
+    var catLimitInput by remember { mutableStateOf("") }
+    var catColorSelected by remember { mutableStateOf("") }
+    var oldCategoryName by remember { mutableStateOf<String?>(null) }
+
+    // Gasto input fields
+    var txAmountInput by remember { mutableStateOf("") }
+    var txDescInput by remember { mutableStateOf("") }
+    var txCurrencySelected by remember { mutableStateOf("USD") } // "USD" or "VES"
+    var txCategorySelected by remember { mutableStateOf("") }
+    var txIsIncomeSelected by remember { mutableStateOf(false) }
+    var txDateInput by remember { mutableStateOf(System.currentTimeMillis()) }
+    var txBalanceDateInput by remember { mutableStateOf<Long?>(null) }
+    val coroutineScope = rememberCoroutineScope()
+    val context = LocalContext.current
+
+    val bcvRateStr = settings.find { it.key == "bcv_rate" }?.value ?: "36.85"
+    val bcvRate = bcvRateStr.toDoubleOrNull() ?: 36.85
+    val totalLimitStr = settings.find { it.key == "total_limit_usd" }?.value ?: "1800.0"
+    val totalLimit = totalLimitStr.toDoubleOrNull() ?: 1800.0
+
+    var dialogBcvRate by remember { mutableStateOf(bcvRate) }
+
+    LaunchedEffect(bcvRate) {
+        dialogBcvRate = bcvRate
+    }
+
+    LaunchedEffect(txDateInput, txCurrencySelected) {
+        if (txCurrencySelected == "VES") {
+            val rate = BcvExchangeRateService.fetchRateForDate(txDateInput)
+            if (rate > 0.0) {
+                dialogBcvRate = rate
+            }
+        }
+    }
+
+    val filteredTransactionsAccounts = transactions.filter { tx ->
+        val txCal = java.util.Calendar.getInstance().apply { timeInMillis = if (tx.balanceDate > 0L) tx.balanceDate else tx.date }
+        txCal.get(java.util.Calendar.YEAR) == selectedMonth.get(java.util.Calendar.YEAR) && txCal.get(java.util.Calendar.MONTH) == selectedMonth.get(java.util.Calendar.MONTH)
+    }
+    val userTransactions = filteredTransactionsAccounts.sortedByDescending { if (it.balanceDate > 0) it.balanceDate else it.date }
+        .filter { historyCategoryFilter == "Todas" || it.category.equals(historyCategoryFilter, ignoreCase = true) }
+    val spentUsd = userTransactions.filter { !it.isIncome }.sumOf { it.amount }
+    val totalIncomeUsdTab = userTransactions.filter { it.isIncome }.sumOf { it.amount }
+
+    if (showHistoryCategoryDropdown) {
+        val catNames = listOf("Todas") + categories.map { it.categoryName }.distinct()
+        AlertDialog(
+            onDismissRequest = { showHistoryCategoryDropdown = false },
+            title = { Text("Filtrar por Categoría", fontSize = 18.sp, fontWeight = FontWeight.Bold) },
+            text = {
+                androidx.compose.foundation.lazy.LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp)) {
+                    items(catNames) { cat ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .scaleClickable { historyCategoryFilter = cat
+                                    showHistoryCategoryDropdown = false
+                                }
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(cat, fontSize = 16.sp, fontWeight = if (historyCategoryFilter == cat) FontWeight.Bold else FontWeight.Normal)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showHistoryCategoryDropdown = false }) { Text("Cerrar") }
+            }
+        )
+    }
+
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp),
+        contentPadding = PaddingValues(bottom = 120.dp)
+    ) {
+        item {
+            MonthSelector(selectedMonth = selectedMonth, onMonthChange = { viewModel.updateSelectedMonth(it) })
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+        item {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.60f))
+                    .border(1.dp, Color.White.copy(alpha = 0.45f), RoundedCornerShape(24.dp))
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Presupuestos & Gastos",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Sub Tab selectors
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .padding(4.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (activeAccountsSection == "gastos") MaterialTheme.colorScheme.surface else Color.Transparent)
+                        .scaleClickable { activeAccountsSection = "gastos" }
+                        .padding(vertical = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        "Historial de Gastos",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (activeAccountsSection == "gastos") MaterialTheme.colorScheme.primary else SubtitleText,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (activeAccountsSection == "categorias") MaterialTheme.colorScheme.surface else Color.Transparent)
+                        .scaleClickable { activeAccountsSection = "categorias" }
+                        .padding(vertical = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        "Presupuestos",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (activeAccountsSection == "categorias") MaterialTheme.colorScheme.primary else SubtitleText,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(14.dp))
+        }
+
+        if (activeAccountsSection == "gastos") {
+            // General multi-currency stats bar
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp)
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .scaleClickable { showHistoryCategoryDropdown = true }
+                        .padding(horizontal = 20.dp, vertical = 14.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.List, contentDescription = "Categoría Actual", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text("FILTRAR POR CATEGORÍA", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                            Text(historyCategoryFilter, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    Icon(Icons.Default.ArrowDropDown, contentDescription = "Cambiar Categoría", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+
+                PremiumCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .padding(16.dp)
+                            .fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("GASTOS DEL HOGAR", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                            Text("${spentUsd.roundToInt()} USD", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Button(
+                            onClick = {
+                                if (categories.isNotEmpty()) {
+                                    txCategorySelected = categories.first().categoryName
+                                }
+                                txDateInput = System.currentTimeMillis()
+                                dialogBcvRate = bcvRate
+                                showAddTxDialog = true
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = "Add Gasto", modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Registrar", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+
+            // Gasto list items mapped
+            if (userTransactions.isEmpty()) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("No se han registrado transacciones aún.", color = SubtitleText, fontSize = 12.sp)
+                    }
+                }
+            } else {
+                items(userTransactions) { tx ->
+                    val format = SimpleDateFormat("dd/MM HH:mm", Locale.getDefault())
+                    val displayDate = if (tx.balanceDate > 0) tx.balanceDate else tx.date
+                    val dateString = format.format(Date(displayDate))
+                    val assocColor = if (tx.isIncome) "#2E7D32" else (categories.find { it.categoryName.equals(tx.category, ignoreCase = true) }?.colorHex ?: "#6750A4")
+
+                    Box {
+                        PremiumCard(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp)
+                                .scaleClickable { editingTransaction = tx
+                                    txAmountInput = tx.originalAmount.toString()
+                                    txDescInput = tx.description
+                                    txCurrencySelected = tx.currency
+                                    txCategorySelected = tx.category
+                                    txIsIncomeSelected = tx.isIncome
+                                    txDateInput = tx.date
+                                    txBalanceDateInput = if (tx.balanceDate > 0) tx.balanceDate else tx.date
+                                    dialogBcvRate = tx.bcvRateUsed
+                                    showEditTxDialog = true
+                                },
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                            border = borderStroke(1.dp, OutlineGrey)
+                        ) {
+                        Row(
+                            modifier = Modifier
+                                .padding(12.dp)
+                                .fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                // Category color avatar dot
+                                val foundCat = categories.find { it.categoryName.equals(tx.category, ignoreCase = true) }
+                                val iconStr = foundCat?.iconEmoji ?: ""
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .background(if (tx.isIncome || iconStr.isEmpty()) assocColor.toColor() else Color.Transparent),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (tx.isIncome) {
+                                        Text("I", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                    } else if (iconStr.isNotEmpty()) {
+                                        Text(text = iconStr, fontSize = 24.sp)
+                                    } else {
+                                        Text(
+                                            text = tx.category.take(1).uppercase(),
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 14.sp
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text(tx.description, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(tx.category, fontSize = 10.sp, color = SubtitleText, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("•", fontSize = 10.sp, color = OutlineGrey)
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(dateString, fontSize = 10.sp, color = SubtitleText)
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.width(8.dp))
+
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Column(horizontalAlignment = Alignment.End) {
+                                    // Displays original registered currency
+                                    val symbol = if (tx.currency == "USD") "$" else "Bs"
+                                    val prefix = if (tx.isIncome) "+" else "-"
+                                    val amountColor = if (tx.isIncome) Color(0xFF2E7D32) else MaterialTheme.colorScheme.onSurface
+                                    Text(
+                                        "$prefix ${tx.originalAmount} $symbol",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = amountColor
+                                    )
+                                    // If Bolivars, also show equivalent dollar conversion review
+                                    if (tx.currency != "USD") {
+                                        Text(
+                                            "(${String.format("%.2f", tx.amount)} $ • ${tx.bcvRateUsed} Bs)",
+                                            fontSize = 9.sp,
+                                            color = SubtitleText,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                    
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(CircleShape)
+                                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(tx.registeredBy, fontSize = 8.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                    }
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        if (tx.receiptUrl.isNotEmpty()) {
+                                            IconButton(onClick = {
+                                                photoUrlToShow = tx.receiptUrl
+                                            }, modifier = Modifier.size(22.dp)) {
+                                                Icon(Icons.Default.Image, contentDescription = "Ver Foto", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                                            }
+                                        }
+                                        IconButton(onClick = {
+                                            editingTransaction = tx
+                                            txAmountInput = tx.originalAmount.toString()
+                                            txDescInput = tx.description
+                                            txCurrencySelected = tx.currency
+                                            txCategorySelected = tx.category
+                                            txIsIncomeSelected = tx.isIncome
+                                            txDateInput = tx.date
+                                            txBalanceDateInput = if (tx.balanceDate > 0) tx.balanceDate else tx.date
+                                            dialogBcvRate = tx.bcvRateUsed
+                                            showEditTxDialog = true
+                                        }, modifier = Modifier.size(22.dp)) {
+                                            Icon(Icons.Default.Edit, contentDescription = "Editar", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                                        }
+                                        IconButton(onClick = { viewModel.deleteTransaction(tx) }, modifier = Modifier.size(22.dp)) {
+                                            Icon(Icons.Default.Delete, contentDescription = "Eliminar", tint = AlertRed, modifier = Modifier.size(16.dp))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    }
+                }
+            }
+        } else {
+            // --- CATEGORIES SUB TAB ---
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Configuración de Límites", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = SubtitleText)
+                    Button(
+                        onClick = { showAddCategoryDialog = true },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = "Nueva categoría", modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Categoría", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+                Spacer(modifier = Modifier.height(10.dp))
+            }
+
+            // Categories loop
+            if (categories.isEmpty()) {
+                item {
+                    Box(modifier = Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+                        Text("No se han creado categorías aún.", color = SubtitleText, fontSize = 12.sp)
+                    }
+                }
+            } else {
+                items(categories) { category ->
+                    val catSpent = userTransactions.filter { !it.isIncome && it.category.equals(category.categoryName, ignoreCase = true) }.sumOf { it.amount }
+                    val currentLimit = category.limitsPerMonth[monthKey] ?: category.limitAmount
+                    val fraction = if (currentLimit > 0) (catSpent / currentLimit).toFloat() else 0f
+                    val isExceeded = catSpent > currentLimit
+
+                    PremiumCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                        border = borderStroke(1.dp, if (isExceeded) AlertRed.copy(alpha = 0.5f) else OutlineGrey)
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    if (category.iconEmoji.isNotBlank()) {
+                                        Text(category.iconEmoji, fontSize = 16.sp)
+                                    } else {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(14.dp)
+                                                .clip(CircleShape)
+                                                .background(category.colorHex.toColor())
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(category.categoryName, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                }
+
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        "${catSpent.roundToInt()} / ${currentLimit.roundToInt()} USD",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isExceeded) AlertRed else MaterialTheme.colorScheme.primary
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    IconButton(
+                                        onClick = {
+                                            catNameInput = category.categoryName
+                                            oldCategoryName = category.categoryName
+                                            catLimitInput = currentLimit.roundToInt().toString()
+                                            catColorSelected = category.iconEmoji
+                                            isEditingCategory = true
+                                            showAddCategoryDialog = true
+                                        },
+                                        modifier = Modifier.size(28.dp)
+                                    ) {
+                                        Icon(Icons.Default.Edit, contentDescription = "Editar", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(14.dp))
+                                    }
+                                    Spacer(modifier = Modifier.width(2.dp))
+                                    IconButton(
+                                        onClick = { viewModel.deleteCategory(category) },
+                                        modifier = Modifier.size(28.dp)
+                                    ) {
+                                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = AlertRed.copy(alpha = 0.7f), modifier = Modifier.size(14.dp))
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            LinearProgressIndicator(
+                                progress = { fraction.coerceIn(0f, 1f) },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(6.dp)
+                                    .clip(RoundedCornerShape(3.dp)),
+                                color = if (isExceeded) AlertRed else category.colorHex.toColor(),
+                                trackColor = MaterialTheme.colorScheme.surface
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // --- POPUP: ADD/EDIT CATEGORY DIALOG ---
+    if (showAddCategoryDialog) {
+        AlertDialog(
+            onDismissRequest = { 
+                showAddCategoryDialog = false 
+                isEditingCategory = false
+                catNameInput = ""
+                oldCategoryName = null
+                catLimitInput = ""
+            },
+            title = { Text(if (isEditingCategory) "Editar Categoría de Gasto" else "Nueva Categoría de Gasto", fontSize = 16.sp, fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences), 
+                        value = catNameInput,
+                        onValueChange = { catNameInput = it },
+                        label = { Text("Nombre de la categoría") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = catLimitInput,
+                        onValueChange = { catLimitInput = it },
+                        label = { Text("Límite mensual en $ (USD)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+
+                    // Emoji input instead of color swatches
+                    OutlinedTextField(keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences), 
+                        value = catColorSelected,
+                        onValueChange = { catColorSelected = it },
+                        label = { Text("Emoji representativo (opcional)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val limitNum = catLimitInput.toDoubleOrNull() ?: 200.0
+                    if (catNameInput.isNotBlank()) {
+                        viewModel.createOrEditCategory(oldCategoryName, catNameInput, limitNum, catColorSelected, monthKey)
+                        catNameInput = ""
+                        oldCategoryName = null
+                        catLimitInput = ""
+                        catColorSelected = ""
+                        isEditingCategory = false
+                        showAddCategoryDialog = false
+                    }
+                }) {
+                    Text(if (isEditingCategory) "Guardar" else "Crear", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { 
+                    showAddCategoryDialog = false 
+                    isEditingCategory = false
+                    catNameInput = ""
+                    oldCategoryName = null
+                    catLimitInput = ""
+                }) {
+                    Text("Cancelar", color = SubtitleText)
+                }
+            },
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    }
+
+    // --- POPUP: ADD MANUALLY TRANSACTION ---
+    if (showAddTxDialog) {
+        AlertDialog(
+            onDismissRequest = { 
+                showAddTxDialog = false
+                txIsIncomeSelected = false
+                txAmountInput = ""
+                txDescInput = ""
+            },
+            title = { Text(if (txIsIncomeSelected) "Registrar Ingreso Manual" else "Registrar Gasto Manual", fontSize = 16.sp, fontWeight = FontWeight.Bold) },
+            text = {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    // Transaction Type Selector: Gasto vs. Ingreso
+                    Text("Tipo de registro:", fontSize = 12.sp, color = SubtitleText, fontWeight = FontWeight.Medium)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.surface)
+                            .padding(2.dp)
+                    ) {
+                        listOf(false, true).forEach { isInc ->
+                            val isSelected = txIsIncomeSelected == isInc
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(if (isSelected) (if (isInc) Color(0xFF2E7D32) else MaterialTheme.colorScheme.primary) else Color.Transparent)
+                                    .scaleClickable { txIsIncomeSelected = isInc }
+                                    .padding(vertical = 6.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = if (isInc) "Ingreso (+)" else "Gasto (-)",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isSelected) Color.White else SubtitleText
+                                )
+                            }
+                        }
+                    }
+
+                    // Currency Selector: Dollar ($) vs. Venezuelan Bolivars (Bs)
+                    Text("Selecciona la moneda:", fontSize = 12.sp, color = SubtitleText, fontWeight = FontWeight.Medium)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.surface)
+                            .padding(2.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(if (txCurrencySelected == "USD") MaterialTheme.colorScheme.primary else Color.Transparent)
+                                .scaleClickable { txCurrencySelected = "USD" }
+                                .padding(vertical = 6.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                "Dólar ($)",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (txCurrencySelected == "USD") Color.White else SubtitleText
+                            )
+                        }
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(if (txCurrencySelected == "VES") MaterialTheme.colorScheme.primary else Color.Transparent)
+                                .scaleClickable { txCurrencySelected = "VES" }
+                                .padding(vertical = 6.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                "Bolívares (Bs)",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (txCurrencySelected == "VES") Color.White else SubtitleText
+                            )
+                        }
+                    }
+
+                    // Date Selector Outlined Box
+                    val sdf = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .scaleClickable { val calendar = Calendar.getInstance().apply { timeInMillis = txDateInput }
+                                android.app.DatePickerDialog(
+                                    context,
+                                    { _, year, month, dayOfMonth ->
+                                        val newCal = Calendar.getInstance().apply {
+                                            set(Calendar.YEAR, year)
+                                            set(Calendar.MONTH, month)
+                                            set(Calendar.DAY_OF_MONTH, dayOfMonth)
+                                        }
+                                        txDateInput = newCal.timeInMillis
+                                    },
+                                    calendar.get(Calendar.YEAR),
+                                    calendar.get(Calendar.MONTH),
+                                    calendar.get(Calendar.DAY_OF_MONTH)
+                                ).show()
+                            }
+                    ) {
+                        OutlinedTextField(keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences), 
+                            value = sdf.format(Date(txDateInput)),
+                            onValueChange = {},
+                            label = { Text("Fecha de registro") },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = false,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                                disabledBorderColor = OutlineGrey,
+                                disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        )
+                    }
+
+                    // Optional Balance Date Selector
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .scaleClickable { val calendar = Calendar.getInstance().apply { timeInMillis = txBalanceDateInput ?: txDateInput }
+                                android.app.DatePickerDialog(
+                                    context,
+                                    { _, year, month, dayOfMonth ->
+                                        val newCal = Calendar.getInstance().apply {
+                                            set(Calendar.YEAR, year)
+                                            set(Calendar.MONTH, month)
+                                            set(Calendar.DAY_OF_MONTH, dayOfMonth)
+                                        }
+                                        txBalanceDateInput = newCal.timeInMillis
+                                    },
+                                    calendar.get(Calendar.YEAR),
+                                    calendar.get(Calendar.MONTH),
+                                    calendar.get(Calendar.DAY_OF_MONTH)
+                                ).show()
+                            }
+                    ) {
+                        OutlinedTextField(keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences), 
+                            value = txBalanceDateInput?.let { sdf.format(Date(it)) } ?: "",
+                            onValueChange = {},
+                            label = { Text("Fecha de Balance (Opcional)") },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = false,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                                disabledBorderColor = OutlineGrey,
+                                disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
+                            ),
+                            placeholder = { Text("Usar misma que el registro") }
+                        )
+                    }
+
+                    OutlinedTextField(
+                        value = txAmountInput,
+                        onValueChange = { txAmountInput = it },
+                        label = { Text(if (txCurrencySelected == "USD") "Monto en Dólares ($)" else "Monto en Bolívares (Bs)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    OutlinedTextField(keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences), 
+                        value = txDescInput,
+                        onValueChange = { txDescInput = it },
+                        label = { Text("Descripción") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+
+                    // conversion preview
+                    if (txCurrencySelected == "VES") {
+                        val amountVal = txAmountInput.toDoubleOrNull() ?: 0.0
+                        val equiv = if (dialogBcvRate > 0.0) amountVal / dialogBcvRate else 0.0
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f))
+                                .padding(10.dp)
+                        ) {
+                            Text(
+                                text = "Equivale a ~${String.format("%.2f", equiv)} $ USD (Tasa de la fecha: ${String.format("%.2f", dialogBcvRate)} Bs/USD)",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+
+                    if (!txIsIncomeSelected) {
+                        Text("Selecciona la categoría correspondiente:", fontSize = 12.sp, color = SubtitleText, fontWeight = FontWeight.Medium)
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            categories.forEach { cat ->
+                                val isSelected = txCategorySelected == cat.categoryName
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface)
+                                        .scaleClickable { txCategorySelected = cat.categoryName }
+                                        .padding(horizontal = 8.dp, vertical = 6.dp)
+                                ) {
+                                    Text(
+                                        text = cat.categoryName,
+                                        fontSize = 11.sp,
+                                        color = if (isSelected) Color.White else MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val originalVal = txAmountInput.toDoubleOrNull()
+                    if (originalVal != null && originalVal > 0.0 && txDescInput.isNotBlank() && (txIsIncomeSelected || txCategorySelected.isNotBlank())) {
+                        viewModel.addTransaction(
+                            originalAmount = originalVal,
+                            category = if (txIsIncomeSelected) "Ingreso" else txCategorySelected,
+                            description = txDescInput,
+                            currency = txCurrencySelected,
+                            isIncome = txIsIncomeSelected,
+                            date = txDateInput,
+                            balanceDate = txBalanceDateInput ?: txDateInput
+                        )
+                        txAmountInput = ""
+                        txDescInput = ""
+                        txBalanceDateInput = null
+                        txIsIncomeSelected = false
+                        showAddTxDialog = false
+                    }
+                }) {
+                    Text("Registrar", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { 
+                    showAddTxDialog = false 
+                    txIsIncomeSelected = false
+                    txAmountInput = ""
+                    txDescInput = ""
+                }) {
+                    Text("Cancelar", color = SubtitleText)
+                }
+            },
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    }
+
+    // --- POPUP: EDIT GASTO DIALOG ---
+    if (showEditTxDialog && editingTransaction != null) {
+        AlertDialog(
+            onDismissRequest = { 
+                showEditTxDialog = false 
+                editingTransaction = null
+                txAmountInput = ""
+                txDescInput = ""
+                txIsIncomeSelected = false
+                txBalanceDateInput = null
+            },
+            title = { Text(if (txIsIncomeSelected) "Editar Ingreso" else "Editar Gasto", fontSize = 16.sp, fontWeight = FontWeight.Bold) },
+            text = {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    // Transaction Type Selector: Gasto vs. Ingreso
+                    Text("Tipo de registro:", fontSize = 12.sp, color = SubtitleText, fontWeight = FontWeight.Medium)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.surface)
+                            .padding(2.dp)
+                    ) {
+                        listOf(false, true).forEach { isInc ->
+                            val isSelected = txIsIncomeSelected == isInc
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(if (isSelected) (if (isInc) Color(0xFF2E7D32) else MaterialTheme.colorScheme.primary) else Color.Transparent)
+                                    .scaleClickable { txIsIncomeSelected = isInc }
+                                    .padding(vertical = 6.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = if (isInc) "Ingreso (+)" else "Gasto (-)",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isSelected) Color.White else SubtitleText
+                                )
+                            }
+                        }
+                    }
+
+                    Text("Selecciona la moneda:", fontSize = 12.sp, color = SubtitleText, fontWeight = FontWeight.Medium)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.surface)
+                            .padding(2.dp)
+                    ) {
+                        listOf("USD", "VES").forEach { cur ->
+                            val isSelected = txCurrencySelected == cur
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent)
+                                    .scaleClickable { txCurrencySelected = cur }
+                                    .padding(vertical = 6.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = if (cur == "USD") "Dólar ($ USD)" else "Bolívares (Bs VES)",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
+
+                    // Date Selector Outlined Box (Edit)
+                    val sdf = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .scaleClickable { val calendar = Calendar.getInstance().apply { timeInMillis = txDateInput }
+                                android.app.DatePickerDialog(
+                                    context,
+                                    { _, year, month, dayOfMonth ->
+                                        val newCal = Calendar.getInstance().apply {
+                                            set(Calendar.YEAR, year)
+                                            set(Calendar.MONTH, month)
+                                            set(Calendar.DAY_OF_MONTH, dayOfMonth)
+                                        }
+                                        txDateInput = newCal.timeInMillis
+                                    },
+                                    calendar.get(Calendar.YEAR),
+                                    calendar.get(Calendar.MONTH),
+                                    calendar.get(Calendar.DAY_OF_MONTH)
+                                ).show()
+                            }
+                    ) {
+                        OutlinedTextField(keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences), 
+                            value = sdf.format(Date(txDateInput)),
+                            onValueChange = {},
+                            label = { Text("Fecha de registro") },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = false,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                                disabledBorderColor = OutlineGrey,
+                                disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        )
+                    }
+
+                    // Optional Balance Date Selector (Edit)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .scaleClickable { val calendar = Calendar.getInstance().apply { timeInMillis = txBalanceDateInput ?: txDateInput }
+                                android.app.DatePickerDialog(
+                                    context,
+                                    { _, year, month, dayOfMonth ->
+                                        val newCal = Calendar.getInstance().apply {
+                                            set(Calendar.YEAR, year)
+                                            set(Calendar.MONTH, month)
+                                            set(Calendar.DAY_OF_MONTH, dayOfMonth)
+                                        }
+                                        txBalanceDateInput = newCal.timeInMillis
+                                    },
+                                    calendar.get(Calendar.YEAR),
+                                    calendar.get(Calendar.MONTH),
+                                    calendar.get(Calendar.DAY_OF_MONTH)
+                                ).show()
+                            }
+                    ) {
+                        OutlinedTextField(keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences), 
+                            value = txBalanceDateInput?.let { sdf.format(Date(it)) } ?: "",
+                            onValueChange = {},
+                            label = { Text("Fecha de Balance (Opcional)") },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = false,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                                disabledBorderColor = OutlineGrey,
+                                disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
+                            ),
+                            placeholder = { Text("Usar misma que el registro") }
+                        )
+                    }
+
+                    OutlinedTextField(
+                        value = txAmountInput,
+                        onValueChange = { txAmountInput = it },
+                        label = { Text("Monto") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+
+                    OutlinedTextField(keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences), 
+                        value = txDescInput,
+                        onValueChange = { txDescInput = it },
+                        label = { Text("Detalle / Concepto") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+
+                    if (txCurrencySelected == "VES") {
+                        val amountVal = txAmountInput.toDoubleOrNull() ?: 0.0
+                        val equiv = if (dialogBcvRate > 0.0) amountVal / dialogBcvRate else 0.0
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f))
+                                .padding(10.dp)
+                        ) {
+                            Text(
+                                text = "Equivale a ~${String.format("%.2f", equiv)} $ USD (Tasa de la fecha: ${String.format("%.2f", dialogBcvRate)} Bs/USD)",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+
+                    if (!txIsIncomeSelected) {
+                        Text("Selecciona la categoría correspondiente:", fontSize = 12.sp, color = SubtitleText, fontWeight = FontWeight.Medium)
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            categories.forEach { cat ->
+                                val isSelected = txCategorySelected == cat.categoryName
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface)
+                                        .scaleClickable { txCategorySelected = cat.categoryName }
+                                        .padding(horizontal = 8.dp, vertical = 6.dp)
+                                ) {
+                                    Text(
+                                        text = cat.categoryName,
+                                        fontSize = 11.sp,
+                                        color = if (isSelected) Color.White else MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    
+                    if (editingTransaction?.receiptUrl?.isNotEmpty() == true) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        val localContext = androidx.compose.ui.platform.LocalContext.current
+                        Button(
+                            onClick = {
+                                photoUrlToShow = editingTransaction!!.receiptUrl
+                            },
+                            modifier = Modifier.fillMaxWidth().height(45.dp),
+                            colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer, 
+                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                            ),
+                            shape = RoundedCornerShape(10.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp)
+                        ) {
+                            Icon(Icons.Default.Image, contentDescription = "Ver Foto", modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Ver foto del recibo", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val originalVal = txAmountInput.toDoubleOrNull()
+                    if (originalVal != null && originalVal > 0.0 && txDescInput.isNotBlank() && (txIsIncomeSelected || txCategorySelected.isNotBlank())) {
+                        val updated = editingTransaction!!.copy(
+                            originalAmount = originalVal,
+                            category = if (txIsIncomeSelected) "Ingreso" else txCategorySelected,
+                            description = txDescInput,
+                            currency = txCurrencySelected,
+                            isIncome = txIsIncomeSelected,
+                            date = txDateInput,
+                            balanceDate = txBalanceDateInput ?: txDateInput
+                        )
+                        viewModel.editTransaction(updated)
+                        txAmountInput = ""
+                        txDescInput = ""
+                        txBalanceDateInput = null
+                        showEditTxDialog = false
+                        editingTransaction = null
+                        txIsIncomeSelected = false
+                    }
+                }) {
+                    Text("Guardar", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { 
+                    showEditTxDialog = false 
+                    editingTransaction = null
+                    txAmountInput = ""
+                    txDescInput = ""
+                    txIsIncomeSelected = false
+                }) {
+                    Text("Cancelar", color = SubtitleText)
+                }
+            },
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    }
+
+    if (photoUrlToShow != null) {
+        AlertDialog(
+            onDismissRequest = { photoUrlToShow = null },
+            title = { Text("Foto de Recibo", fontSize = 16.sp, fontWeight = FontWeight.Bold) },
+            text = {
+                if (photoUrlToShow!!.startsWith("data:image/jpeg;base64,")) {
+                    val base64Str = photoUrlToShow!!.substringAfter("base64,")
+                    val imageBytes = android.util.Base64.decode(base64Str, android.util.Base64.DEFAULT)
+                    val bmp = android.graphics.BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
+                    if (bmp != null) {
+                        var scale by remember { mutableFloatStateOf(1f) }
+                        var offset by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+
+                        androidx.compose.foundation.Image(
+                            bitmap = bmp.asImageBitmap(),
+                            contentDescription = "Recibo",
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(400.dp)
+                                .pointerInput(Unit) {
+                                    val viewSize = this.size
+                                    detectTransformGestures { _, pan, zoom, _ ->
+                                        scale = (scale * zoom).coerceIn(1f, 5f)
+                                        val maxOffsetX = (viewSize.width.toFloat() * (scale - 1f)) / 2f
+                                        val maxOffsetY = (viewSize.height.toFloat() * (scale - 1f)) / 2f
+                                        offset = androidx.compose.ui.geometry.Offset(
+                                            x = (offset.x + pan.x * scale).coerceIn(-maxOffsetX, maxOffsetX),
+                                            y = (offset.y + pan.y * scale).coerceIn(-maxOffsetY, maxOffsetY)
+                                        )
+                                    }
+                                }
+                                .graphicsLayer(
+                                    scaleX = scale,
+                                    scaleY = scale,
+                                    translationX = offset.x,
+                                    translationY = offset.y
+                                )
+                        )
+                    } else {
+                        Text("Error al cargar la imagen.")
+                    }
+                } else {
+                    Text("Enlace no válido para imagen base64.")
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { photoUrlToShow = null }) {
+                    Text("Cerrar", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                }
+            }
+        )
+    }
+}

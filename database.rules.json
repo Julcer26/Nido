@@ -1,0 +1,26 @@
+{
+  "rules": {
+    "config": {
+      ".read": true,
+      ".write": "auth != null"
+    },
+    "users": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+    "families": {
+      "$familyId": {
+        ".read": "auth != null && root.child('families/'+$familyId+'/members/'+auth.uid).val() === true",
+        ".write": "auth != null && root.child('families/'+$familyId+'/members/'+auth.uid).val() === true",
+        "members": {
+          "$uid": {
+            ".read": "auth != null && (auth.uid === $uid || root.child('families/'+$familyId+'/members/'+auth.uid).val() === true)",
+            ".write": "auth != null && auth.uid === $uid"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Nido - Admin Panel (OTA)</title>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-storage-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; background: #f4f4f9; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        input, button { width: 100%; padding: 10px; margin: 10px 0; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+        button { background: #6200ea; color: white; border: none; cursor: pointer; font-weight: bold; }
+        button:hover { background: #3700b3; }
+        #app-section { display: none; }
+        #status { color: #d32f2f; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h2>Nido - Panel de Actualizaciones OTA</h2>
+    <div id="status"></div>
+
+    <div class="card" id="login-section">
+        <h3>Iniciar Sesión</h3>
+        <input type="email" id="email" placeholder="Tu correo">
+        <input type="password" id="password" placeholder="Tu contraseña">
+        <button onclick="login()">Ingresar</button>
+    </div>
+
+    <div class="card" id="app-section">
+        <h3>Subir Nueva Actualización</h3>
+        <label>Versión (Code):</label>
+        <input type="number" id="version" placeholder="Ej: 2">
+        <label>Archivo APK:</label>
+        <input type="file" id="apkfile" accept=".apk">
+        <button onclick="uploadUpdate()">Subir Actualización</button>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+          apiKey: "AIzaSyD4GZ-DUfvXgqRKiJSbuiH-6R3YAxYTrLU",
+          authDomain: "hogar-finanzas-2026.firebaseapp.com",
+          databaseURL: "https://hogar-finanzas-2026-default-rtdb.firebaseio.com",
+          projectId: "hogar-finanzas-2026",
+          storageBucket: "hogar-finanzas-2026.firebasestorage.app",
+          messagingSenderId: "1050884199444",
+          appId: "1:1050884199444:android:fcba821b52ea1109d14301"
+        };
+        firebase.initializeApp(firebaseConfig);
+
+        firebase.auth().onAuthStateChanged(user => {
+            if (user) {
+                document.getElementById('login-section').style.display = 'none';
+                document.getElementById('app-section').style.display = 'block';
+                showStatus("Sesión iniciada: " + user.email, "green");
+            } else {
+                document.getElementById('login-section').style.display = 'block';
+                document.getElementById('app-section').style.display = 'none';
+            }
+        });
+
+        function login() {
+            firebase.auth().signInWithEmailAndPassword(
+                document.getElementById('email').value,
+                document.getElementById('password').value
+            ).catch(err => showStatus(err.message));
+        }
+
+        async function uploadUpdate() {
+            const version = parseInt(document.getElementById('version').value);
+            const file = document.getElementById('apkfile').files[0];
+            if (!version || !file) return showStatus("Ingresa versión y selecciona APK.");
+
+            showStatus("Subiendo archivo (puede tardar unos minutos)...", "blue");
+            try {
+                const storageRef = firebase.storage().ref().child('updates/app-update.apk');
+                await storageRef.put(file);
+                const url = await storageRef.getDownloadURL();
+                
+                showStatus("Archivo subido. Actualizando base de datos...", "blue");
+                await firebase.database().ref('config').set({
+                    latest_version_code: version,
+                    latest_apk_url: url
+                });
+                
+                showStatus("¡Actualización OTA publicada con éxito!", "green");
+            } catch (error) {
+                showStatus("Error: " + error.message);
+                if(error.message.includes("PERMISSION_DENIED")) {
+                    showStatus("Error de Permisos. Asegúrate de actualizar las Reglas de Realtime Database.", "red");
+                }
+            }
+        }
+
+        function showStatus(msg, color="red") {
+            const s = document.getElementById('status');
+            s.innerText = msg;
+            s.style.color = color;
+        }
+    </script>
+</body>
+</html>

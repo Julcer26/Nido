@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Ambient premium shadow for depth -->
+    <path
+        android:fillColor="#15000000"
+        android:pathData="M 18,50 L 54,23 L 90,50 L 78,82 L 30,82 Z" />
+
+    <!-- Stylized Modern Overhang Roof (Glowing Elegant Sky Blue - AccentTeal) -->
+    <path
+        android:strokeColor="#FF0EA5E9"
+        android:strokeWidth="6.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000"
+        android:pathData="M 18,42 L 50,17 L 82,42" />
+
+    <!-- Elegant Minimalistic Rounded House Base structure (Polished Solid White) -->
+    <path
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="6.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000"
+        android:pathData="M 28,42 L 28,78 C 28,80.5 30,82.5 32.5,82.5 L 67.5,82.5 C 70,82.5 72,80.5 72,78 L 72,42" />
+
+    <!-- Modern Minimalist Heat Hearth / Heart in the center (Radiant Sunset Gold) -->
+    <path
+        android:fillColor="#FFF59E0B"
+        android:pathData="M 50,71.5 C 47.5,68.5 43.5,62.8 43.5,58.8 C 43.5,54.8 46.5,52.5 50,55.8 C 53.5,52.5 56.5,54.8 56.5,58.8 C 56.5,62.8 52.5,68.5 50,71.5 Z" />
+
+</vector>

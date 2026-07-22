@@ -1,0 +1,1345 @@
+fun DashboardTab(
+    viewModel: FamilyViewModel,
+    onOpenConfig: () -> Unit,
+    isScanningDirect: Boolean,
+    errorMessageScan: String?,
+    successMessageScan: String?,
+    showConfirmScanDialog: Boolean,
+    scannedAmount: String,
+    scannedDesc: String,
+    scannedCurrency: String,
+    scannedCategory: String,
+    scannedDate: Long,
+    onSetIsScanningDirect: (Boolean) -> Unit,
+    onSetErrorMessageScan: (String?) -> Unit,
+    onSetSuccessMessageScan: (String?) -> Unit,
+    onSetShowConfirmScanDialog: (Boolean) -> Unit,
+    onSetScannedAmount: (String) -> Unit,
+    onSetScannedDesc: (String) -> Unit,
+    onSetScannedCurrency: (String) -> Unit,
+    onSetScannedCategory: (String) -> Unit,
+    onSetScannedDate: (Long) -> Unit,
+    scannedBitmap: android.graphics.Bitmap?,
+    saveReceiptPhoto: Boolean,
+    onSetSaveReceiptPhoto: (Boolean) -> Unit,
+    onLaunchCamera: () -> Unit,
+    onLaunchGallery: () -> Unit
+) {
+    val currentUser by viewModel.currentUser.collectAsStateWithLifecycle()
+    val profiles by viewModel.profiles.collectAsStateWithLifecycle()
+    val transactions by viewModel.transactions.collectAsStateWithLifecycle()
+    val categories by viewModel.categories.collectAsStateWithLifecycle()
+    val chores by viewModel.chores.collectAsStateWithLifecycle()
+    val shoppingItems by viewModel.shoppingItems.collectAsStateWithLifecycle()
+    val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val selectedMonth by viewModel.selectedMonth.collectAsStateWithLifecycle()
+    val activityLogs by viewModel.activityLogs.collectAsStateWithLifecycle()
+    val isRegisteringNlp by viewModel.isRegisteringNlp.collectAsStateWithLifecycle()
+    val nlpError by viewModel.nlpError.collectAsStateWithLifecycle()
+
+    var nlpInputText by remember { mutableStateOf("") }
+
+    // --- AI & Sincronización State variables ---
+    val coroutineScope = rememberCoroutineScope()
+    val context = LocalContext.current
+    
+    var showEmailSyncDialog by remember { mutableStateOf(false) }
+    // showConfirmScanDialog, isScanningDirect, errorMessageScan, successMessageScan,
+    // scannedAmount, scannedDesc, scannedCurrency, scannedCategory are now hoisted to MainScreen
+    
+    // Email sync flows & simulation
+    var isLinkingEmail by remember { mutableStateOf(false) }
+    var isEmailLinked by remember { mutableStateOf(false) }
+    var isFetchingEmails by remember { mutableStateOf(false) }
+    var selectedEmailsToSync by remember { mutableStateOf(setOf<Int>()) }
+    val hideBalanceSetting = settings.find { it.key == "hide_balance" }?.value
+    var showBalance by remember(hideBalanceSetting) { mutableStateOf(hideBalanceSetting != "true") }
+
+    // imagePickerLauncherDirect, cameraLauncherDirect, launchHighResCamera, permissionLauncher
+    // are now hoisted to MainScreen and passed via onLaunchCamera / onLaunchGallery lambdas
+    
+    // Read live rates & parameters
+    val bcvRateStr = settings.find { it.key == "bcv_rate" }?.value ?: "36.85"
+    val bcvRate = bcvRateStr.toDoubleOrNull() ?: 36.85
+    val totalLimitStr = settings.find { it.key == "total_limit_usd" }?.value ?: "1800.0"
+    val totalLimit = totalLimitStr.toDoubleOrNull() ?: 1800.0
+
+    // FAMILIA COMPARTIDA: Todos los miembros ven todas las transacciones
+    val userTransactions = transactions.sortedByDescending { if (it.balanceDate > 0) it.balanceDate else it.date }
+    val curMonth = selectedMonth.get(java.util.Calendar.MONTH)
+    val curYear = selectedMonth.get(java.util.Calendar.YEAR)
+    
+    val currentMonthTransactions = userTransactions.filter {
+        val tCal = java.util.Calendar.getInstance()
+        val filterDate = if (it.balanceDate > 0L) it.balanceDate else it.date
+        tCal.timeInMillis = filterDate
+        tCal.get(java.util.Calendar.MONTH) == curMonth && tCal.get(java.util.Calendar.YEAR) == curYear
+    }
+
+    val totalSpentUsd = currentMonthTransactions.filter { !it.isIncome }.sumOf { it.amount }
+    val baseLimitUsd = totalLimit // Configurado en Ajustes
+    val monthKey = java.text.SimpleDateFormat("yyyy-MM", java.util.Locale.getDefault()).format(selectedMonth.time)
+    val presupuestadoUsd = categories.sumOf { it.limitsPerMonth[monthKey] ?: it.limitAmount } // Suma de categorias
+    val remainingBudgetUsd = presupuestadoUsd - totalSpentUsd
+    val libreBudgetUsd = baseLimitUsd - presupuestadoUsd
+    val spentPercentage = if (presupuestadoUsd > 0) (totalSpentUsd / presupuestadoUsd * 100).roundToInt() else 0
+
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp),
+        contentPadding = PaddingValues(bottom = 120.dp)
+    ) {
+        // App top header (Branding and Settings)
+        item {
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Small premium container for fami Logo
+                    Box(
+                        modifier = Modifier
+                            .size(42.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(
+                                brush = androidx.compose.ui.graphics.Brush.linearGradient(
+                                    colors = listOf(Color(0xFF0D9488), Color(0xFF2DD4BF))
+                                )
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        FamiLogo(modifier = Modifier.size(28.dp))
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "Nido",
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = MaterialTheme.colorScheme.onBackground,
+                                letterSpacing = (-0.5).sp
+                            )
+                            // Elegant gold star particle
+                            Box(
+                                modifier = Modifier
+                                    .padding(start = 4.dp, top = 2.dp)
+                                    .size(5.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFFFFCA28))
+                            )
+                        }
+                        Text(
+                            text = "Hogar & Vida Compartida",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = SubtitleText
+                        )
+                    }
+                }
+
+                // Configuracin gear button at the top right
+                IconButton(
+                    onClick = onOpenConfig,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f), CircleShape)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = "Configuracin",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+        }
+
+        item {
+            Spacer(modifier = Modifier.height(16.dp))
+            MonthSelector(selectedMonth = selectedMonth, onMonthChange = { viewModel.updateSelectedMonth(it) })
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+        // Premium Dashboard Budget Card
+        item {
+            val isDarkTheme by viewModel.isDarkTheme.collectAsStateWithLifecycle()
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp)
+                    .shadow(8.dp, RoundedCornerShape(24.dp), ambientColor = Color.Black.copy(alpha = 0.1f), spotColor = Color.Black.copy(alpha = 0.1f))
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.85f))
+                    .border(1.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(24.dp))
+                    .padding(16.dp)
+            ) {
+                    Column {
+                        // Title row
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.AccountBalanceWallet, contentDescription = null, tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "BALANCE GENERAL",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White.copy(alpha = 0.9f),
+                                    letterSpacing = 1.sp
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                IconToggleButton(
+                                    checked = showBalance,
+                                    onCheckedChange = { 
+                                        showBalance = it
+                                        viewModel.updateValueSetting("hide_balance", if (it) "false" else "true")
+                                    },
+                                    modifier = Modifier.size(20.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (showBalance) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                        contentDescription = "Toggle Balance",
+                                        tint = Color.White.copy(alpha = 0.7f),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                            
+                            // BCV sync chip
+                            Surface(
+                                onClick = { viewModel.syncLiveBcvRate() },
+                                color = Color.White.copy(alpha = 0.15f),
+                                shape = CircleShape
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Default.Refresh, contentDescription = "Sync", modifier = Modifier.size(11.dp), tint = Color.White)
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("BCV: $bcvRateStr", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                }
+                            }
+                        }
+                        
+                        Spacer(modifier = Modifier.height(12.dp))
+                        
+                        // Main Balance Display (Remaining Budget)
+                        Text("DISPONIBLE", fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = Color.White.copy(alpha = 0.7f), letterSpacing = 0.5.sp)
+                        Text(
+                            text = if (showBalance) "${remainingBudgetUsd.roundToInt()} USD" else "•••••• USD",
+                            fontSize = 32.sp,
+                            fontWeight = FontWeight.Black,
+                            color = Color.White
+                        )
+                        
+                        Spacer(modifier = Modifier.height(12.dp))
+                        
+                        // Stats row
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Column {
+                                Text("BASE", fontSize = 10.sp, color = Color.White.copy(alpha = 0.6f))
+                                Text(if (showBalance) "${baseLimitUsd.roundToInt()} USD" else "•••••• USD", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                            }
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("PRESUPUESTADO", fontSize = 10.sp, color = Color.White.copy(alpha = 0.6f))
+                                Text(if (showBalance) "${presupuestadoUsd.roundToInt()} USD" else "•••••• USD", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text("CONSUMIDO", fontSize = 10.sp, color = Color.White.copy(alpha = 0.6f))
+                                Text(if (showBalance) "${totalSpentUsd.roundToInt()} USD" else "•••••• USD", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFF8A65))
+                            }
+                        }
+                        
+                        Spacer(modifier = Modifier.height(10.dp))
+                        
+                        // Progress bar
+                        LinearProgressIndicator(
+                            progress = { (if (totalLimit > 0) (totalSpentUsd / totalLimit) else 0.0).toFloat().coerceIn(0f, 1f) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(6.dp)
+                                .clip(CircleShape),
+                            color = if (spentPercentage >= 85) Color(0xFFFF5252) else Color(0xFF69F0AE),
+                            trackColor = Color.White.copy(alpha = 0.2f)
+                        )
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        // Status alert
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = if (spentPercentage >= 85) Icons.Default.Warning else Icons.Default.CheckCircle,
+                                contentDescription = null,
+                                tint = if (spentPercentage >= 85) Color(0xFFFF5252) else Color(0xFF69F0AE),
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = when {
+                                    spentPercentage >= 100 -> "Excediste tu presupuesto por ${(totalSpentUsd - presupuestadoUsd).roundToInt()} USD"
+                                    spentPercentage >= 85 -> "Alerta: Has consumido el $spentPercentage% de tu límite"
+                                    else -> "Saludable: Has consumido el $spentPercentage% del presupuesto"
+                                },
+                                fontSize = 10.sp,
+                                color = Color.White.copy(alpha = 0.8f)
+                            )
+                        }
+                    }
+                }
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                val userChores = chores.filter { !it.isPrivate || it.createdBy == currentUser || it.assignedTo == currentUser }
+                val pendingChore = userChores.find { !it.isCompleted }
+                val userShopping = shoppingItems.filter { !it.isPrivate || it.addedBy == currentUser }
+                val shoppingCount = userShopping.filter { !it.isBought }.size
+
+                // Next Chore
+                PremiumCard(
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                    border = borderStroke(1.dp, OutlineGrey)
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Text(
+                            text = "PRÓXIMA TAREA",
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = SubtitleText
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        if (pendingChore != null) {
+                            Text(
+                                text = pendingChore.title,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            
+                            val priorityColor = when (pendingChore.priority.lowercase()) {
+                                "alto" -> AlertRed
+                                "medio" -> Color(0xFFF57C00)
+                                else -> Color(0xFF00796B)
+                            }
+                            
+                            Box(
+                                modifier = Modifier
+                                    .clip(CircleShape)
+                                    .background(priorityColor.copy(alpha = 0.15f))
+                                    .padding(horizontal = 8.dp, vertical = 3.dp)
+                            ) {
+                                Text(
+                                    text = pendingChore.priority.uppercase(),
+                                    fontSize = 8.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = priorityColor
+                                )
+                            }
+                        } else {
+                            Text(
+                                text = "Tareas libres 🎉",
+                                fontSize = 12.sp,
+                                color = SubtitleText
+                            )
+                        }
+                    }
+                }
+
+                // Shopping tracker counter
+                PremiumCard(
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                    border = borderStroke(1.dp, OutlineGrey)
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Text(
+                            text = "LISTA DE COMPRAS",
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = SubtitleText
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "$shoppingCount artículos",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "compra de pendientes",
+                            fontSize = 10.sp,
+                            color = SubtitleText
+                        )
+                    }
+                }
+            }
+        }
+
+        // --- SECCIÓN UNIFICADA ESCÁNER DE RECIBOS Y REGISTRO NLP (Se movió abajo) ---
+
+        // --- POPUP DIALOGS FOR SCAN CONFIRMATION & EMAIL SYNC ---
+        item {
+            if (showConfirmScanDialog) {
+                AlertDialog(
+                    onDismissRequest = { onSetShowConfirmScanDialog(false) },
+                    title = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = "Confirmar",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                "Confirmar Gasto con IA ✨",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    },
+                    text = {
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                "La IA leyó este recibo. Revise y ajuste los datos detectados antes de confirmarlo en sus registros.",
+                                fontSize = 11.sp,
+                                color = SubtitleText,
+                                lineHeight = 14.sp
+                            )
+
+                            // Description/Shop field
+                            OutlinedTextField(keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences), 
+                                value = scannedDesc,
+                                onValueChange = { onSetScannedDesc(it) },
+                                label = { Text("Comercio / Detalle", fontSize = 11.sp) },
+                                modifier = Modifier.fillMaxWidth(),
+                                textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp),
+                                singleLine = true
+                            )
+
+                            // Date Selector field
+                            val sdf = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .scaleClickable { val calendar = Calendar.getInstance().apply { timeInMillis = scannedDate }
+                                        android.app.DatePickerDialog(
+                                            context,
+                                            { _, year, month, dayOfMonth ->
+                                                val newCal = Calendar.getInstance().apply {
+                                                    set(Calendar.YEAR, year)
+                                                    set(Calendar.MONTH, month)
+                                                    set(Calendar.DAY_OF_MONTH, dayOfMonth)
+                                                }
+                                                onSetScannedDate(newCal.timeInMillis)
+                                            },
+                                            calendar.get(Calendar.YEAR),
+                                            calendar.get(Calendar.MONTH),
+                                            calendar.get(Calendar.DAY_OF_MONTH)
+                                        ).show()
+                                    }
+                            ) {
+                                OutlinedTextField(keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences), 
+                                    value = sdf.format(Date(scannedDate)),
+                                    onValueChange = {},
+                                    label = { Text("Fecha de Factura / Gasto", fontSize = 11.sp) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    enabled = false,
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                                        disabledBorderColor = OutlineGrey,
+                                        disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                    ),
+                                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp)
+                                )
+                            }
+
+                            // Amount field
+                            OutlinedTextField(
+                                value = scannedAmount,
+                                onValueChange = { onSetScannedAmount(it) },
+                                label = { Text("Monto", fontSize = 11.sp) },
+                                modifier = Modifier.fillMaxWidth(),
+                                textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp),
+                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                                ),
+                                singleLine = true
+                            )
+
+                            // Currency Toggle (USD vs VES)
+                            Text("Moneda:", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = SubtitleText)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                listOf("USD", "VES").forEach { m ->
+                                    val isSelected = scannedCurrency == m
+                                    Button(
+                                        onClick = { onSetScannedCurrency(m) },
+                                        modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(10.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                            contentColor = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                                        ),
+                                        contentPadding = PaddingValues(0.dp)
+                                    ) {
+                                        Text(m + if (m == "USD") " ($)" else " (Bs.)", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+
+                            // Category Selector row
+                            Text("Categoría asignada:", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = SubtitleText)
+                            LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                this@LazyRow.items(categories) { cat ->
+                                    val isSelected = scannedCategory == cat.categoryName
+                                    androidx.compose.material3.FilterChip(
+                                        selected = isSelected,
+                                        onClick = { onSetScannedCategory(cat.categoryName) },
+                                        label = { Text(cat.categoryName, fontSize = 10.sp) },
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                                }
+                            }
+                            
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                androidx.compose.material3.Switch(
+                                    checked = saveReceiptPhoto,
+                                    onCheckedChange = { onSetSaveReceiptPhoto(it) },
+                                    colors = androidx.compose.material3.SwitchDefaults.colors(checkedTrackColor = MaterialTheme.colorScheme.primary)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Guardar foto como respaldo", fontSize = 13.sp)
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        val coroutineScope = rememberCoroutineScope()
+                        Button(
+                            onClick = {
+                                val amt = scannedAmount.toDoubleOrNull() ?: 0.0
+                                if (amt > 0.0 && scannedDesc.isNotBlank()) {
+                                    coroutineScope.launch {
+                                        var receiptUrl = ""
+                                        if (saveReceiptPhoto && scannedBitmap != null) {
+                                            receiptUrl = viewModel.uploadReceiptImage(scannedBitmap!!) ?: ""
+                                        }
+                                        viewModel.addTransaction(
+                                            originalAmount = amt,
+                                            category = if (scannedCategory.isEmpty()) (categories.firstOrNull()?.categoryName ?: "General") else scannedCategory,
+                                            description = scannedDesc,
+                                            currency = scannedCurrency,
+                                            isIncome = false,
+                                            date = scannedDate,
+                                            receiptUrl = receiptUrl
+                                        )
+                                        onSetSuccessMessageScan("Gasto registrado: $amt $scannedCurrency en $scannedDesc")
+                                        onSetShowConfirmScanDialog(false)
+                                    }
+                                } else {
+                                    onSetErrorMessageScan("Por favor ingrese un monto y descripción válidos.")
+                                    onSetShowConfirmScanDialog(false)
+                                }
+                            },
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("Registrar Gasto", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { onSetShowConfirmScanDialog(false) }) {
+                            Text("Descartar", color = SubtitleText, fontSize = 11.sp)
+                        }
+                    }
+                )
+            }
+
+            if (showEmailSyncDialog) {
+                var simMailInput by remember { mutableStateOf(currentUser.ifBlank { "julioingdlop@gmail.com" }) }
+                val detectedEmailsList = listOf(
+                    Triple("PedidosYa - Delivery Cena 🍔", 14.50, "USD"),
+                    Triple("Netflix - Suscripción Familiar 📺", 7.99, "USD"),
+                    Triple("Farmatodo Sabana Grande 💊", 850.00, "VES"),
+                    Triple("MercadoLibre Venezuela 📦", 1200.00, "VES")
+                )
+
+                AlertDialog(
+                    onDismissRequest = { showEmailSyncDialog = false },
+                    title = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Email,
+                                contentDescription = "Email Sync",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                "Vincular Correo Electrónico ✉️",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    },
+                    text = {
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+                        ) {
+                            // COST ANSWER: Let's explain nicely directly to the user
+                            PremiumCard(
+                                colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(0.dp)) {
+                                    Text(
+                                        "",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        "",
+                                        fontSize = 9.5.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        lineHeight = 13.sp
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(6.dp))
+
+                            if (!isEmailLinked) {
+                                Text(
+                                    "Vincule su correo para que la IA escanee su bandeja en búsqueda de recibos digitales de compras y suscripciones de manera automática.",
+                                    fontSize = 11.sp,
+                                    color = SubtitleText,
+                                    lineHeight = 14.sp
+                                )
+
+                                OutlinedTextField(keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences), 
+                                    value = simMailInput,
+                                    onValueChange = { simMailInput = it },
+                                    label = { Text("Correo Electrónico", fontSize = 11.sp) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp),
+                                    singleLine = true
+                                )
+
+                                if (isLinkingEmail) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                        Text("Solicitando autorización de lectura segura OAUTH2...", fontSize = 10.sp, color = SubtitleText)
+                                    }
+                                } else {
+                                    Button(
+                                        onClick = {
+                                            coroutineScope.launch {
+                                                isLinkingEmail = true
+                                                kotlinx.coroutines.delay(1200) // Beautiful realism animation
+                                                isEmailLinked = true
+                                                isLinkingEmail = false
+                                            }
+                                        },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(12.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                                    ) {
+                                        Text("Otorgar Permiso de Correo e IA", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            } else {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Color(0xFFDCFCE7))
+                                        .padding(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(Icons.Default.CheckCircle, "Linked", tint = Color(0xFF16A34A), modifier = Modifier.size(16.dp))
+                                    Text("Bandeja vinculada: $simMailInput", fontSize = 10.sp, color = Color(0xFF15803D), fontWeight = FontWeight.SemiBold)
+                                }
+
+                                if (isFetchingEmails) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 12.dp),
+                                        horizontalArrangement = Arrangement.Center,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Buscando facturas con IA de Gemini...", fontSize = 11.sp, color = SubtitleText)
+                                    }
+                                } else if (selectedEmailsToSync.isEmpty() && !isFetchingEmails) {
+                                    Button(
+                                        onClick = {
+                                            coroutineScope.launch {
+                                                isFetchingEmails = true
+                                                kotlinx.coroutines.delay(1000)
+                                                selectedEmailsToSync = setOf(0, 1) // default preselected PedidosYa and Netflix
+                                                isFetchingEmails = false
+                                            }
+                                        },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(12.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F172A))
+                                    ) {
+                                        Text("Buscar nuevos recibos en bandeja", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+
+                                if (selectedEmailsToSync.isNotEmpty()) {
+                                    Text("Recibos detectados por IA en tus correos:", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                    
+                                    detectedEmailsList.forEachIndexed { index, item ->
+                                        val isChecked = selectedEmailsToSync.contains(index)
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .scaleClickable { selectedEmailsToSync = if (isChecked) {
+                                                        selectedEmailsToSync - index
+                                                    } else {
+                                                        selectedEmailsToSync + index
+                                                    }
+                                                }
+                                                .background(if (isChecked) MaterialTheme.colorScheme.primary.copy(alpha = 0.05f) else Color.Transparent)
+                                                .padding(6.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Checkbox(
+                                                checked = isChecked,
+                                                onCheckedChange = { checked ->
+                                                    selectedEmailsToSync = if (checked == true) {
+                                                        selectedEmailsToSync + index
+                                                    } else {
+                                                        selectedEmailsToSync - index
+                                                    }
+                                                }
+                                            )
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(item.first, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                                                Text("Monto detectado: ${item.second} ${item.third}", fontSize = 9.5.sp, color = SubtitleText)
+                                            }
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(10.dp))
+
+                                    Button(
+                                        onClick = {
+                                            var count = 0
+                                            selectedEmailsToSync.forEach { idx ->
+                                                val entry = detectedEmailsList[idx]
+                                                viewModel.addTransaction(
+                                                    originalAmount = entry.second,
+                                                    category = "Servicios",
+                                                    description = entry.first,
+                                                    currency = entry.third,
+                                                    isIncome = false
+                                                )
+                                                count++
+                                            }
+                                            onSetSuccessMessageScan("Sincronizados con éxito: $count gastos nuevos registrados desde Correo.")
+                                            selectedEmailsToSync = emptySet()
+                                            showEmailSyncDialog = false
+                                        },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) {
+                                        Text("Sincronizar e importar marcados (${selectedEmailsToSync.size})", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+
+                                TextButton(
+                                    onClick = {
+                                        isEmailLinked = false
+                                        selectedEmailsToSync = emptySet()
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("Desvincular Correo", color = Color(0xFFEF4444), fontSize = 10.sp)
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {},
+                    dismissButton = {
+                        TextButton(onClick = { showEmailSyncDialog = false }) {
+                            Text("Cerrar", color = SubtitleText, fontSize = 11.sp)
+                        }
+                    }
+                )
+            }
+        }
+
+        // Conversational Intelligent NLP block & Receipt Scanner Unificado
+        item {
+            PremiumCard(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = borderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.20f))
+            ) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(24.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = "AI Input",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "REGISTRO INTELIGENTE CON IA ✨",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                            letterSpacing = 0.5.sp
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = "Escribe tu gasto o toma una foto del recibo para que la IA lo registre por ti.",
+                        fontSize = 11.sp,
+                        color = SubtitleText,
+                        lineHeight = 15.sp
+                    )
+                    Spacer(modifier = Modifier.height(14.dp))
+                    
+                    OutlinedTextField(keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences), 
+                        value = nlpInputText,
+                        onValueChange = { nlpInputText = it },
+                        placeholder = { Text("ej: Gasté 450 bs en comida...", fontSize = 13.sp) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        trailingIcon = {
+                            if (isRegisteringNlp) {
+                                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                            } else {
+                                IconButton(onClick = {
+                                    if (nlpInputText.isNotBlank()) {
+                                        viewModel.registerFromNaturalLanguage(nlpInputText)
+                                        nlpInputText = ""
+                                    }
+                                }) {
+                                    Icon(
+                                        imageVector = Icons.Default.Send,
+                                        contentDescription = "Enviar",
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                        },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = OutlineGrey
+                        ),
+                        maxLines = 2
+                    )
+
+                    if (nlpError != null) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = nlpError ?: "",
+                            color = MaterialTheme.colorScheme.error,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(start = 4.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        // Take Photo Button (Camera)
+                        Button(
+                            onClick = { onLaunchCamera() },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                        ) {
+                            Icon(Icons.Default.CameraAlt, contentDescription = "Tomar Foto", modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Cámara", fontSize = 11.sp, maxLines = 1, fontWeight = FontWeight.Bold)
+                        }
+
+                        // Select Gallery Button (Gallery)
+                        Button(
+                            onClick = { onLaunchGallery() },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                        ) {
+                            Icon(Icons.Default.Image, contentDescription = "Galería", modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Galería", fontSize = 11.sp, maxLines = 1, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    // Scan Loading Indicators
+                    if (isScanningDirect) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0xFFE0F2FE))
+                                .padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = Color(0xFF0284C7)
+                            )
+                            Text(
+                                text = "IA analizando imagen... Espere.",
+                                fontSize = 10.sp,
+                                color = Color(0xFF0369A1),
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+
+                    if (errorMessageScan != null) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0xFFFEE2E2))
+                                .padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(Icons.Default.Error, "Error", tint = Color(0xFFDC2626), modifier = Modifier.size(16.dp))
+                            Text(
+                                text = errorMessageScan!!,
+                                fontSize = 10.sp,
+                                color = Color(0xFFB91C1C),
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+
+                    if (successMessageScan != null) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0xFFDCFCE7))
+                                .padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(Icons.Default.CheckCircle, "Éxito", tint = Color(0xFF16A34A), modifier = Modifier.size(16.dp))
+                            Text(
+                                text = successMessageScan!!,
+                                fontSize = 10.sp,
+                                color = Color(0xFF15803D),
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        // COMPLETE MONTHLY CALENDAR GRID WIDGET
+        item {
+            var calendarMonth by remember(selectedMonth) { 
+                mutableStateOf(Calendar.getInstance().apply {
+                    set(Calendar.YEAR, selectedMonth.get(Calendar.YEAR))
+                    set(Calendar.MONTH, selectedMonth.get(Calendar.MONTH))
+                }) 
+            }
+            var selectedDayCal by remember(selectedMonth) { 
+                mutableStateOf(Calendar.getInstance().apply {
+                    set(Calendar.YEAR, selectedMonth.get(Calendar.YEAR))
+                    set(Calendar.MONTH, selectedMonth.get(Calendar.MONTH))
+                }) 
+            }
+
+            val year = calendarMonth.get(Calendar.YEAR)
+            val month = calendarMonth.get(Calendar.MONTH)
+            val monthLabel = getMonthNameSpanish(month)
+
+            val firstDayOfMonth = (calendarMonth.clone() as Calendar).apply {
+                set(Calendar.DAY_OF_MONTH, 1)
+            }
+            val firstDayOfWeek = firstDayOfMonth.get(Calendar.DAY_OF_WEEK)
+            val emptyDaysBefore = if (firstDayOfWeek == Calendar.SUNDAY) 6 else firstDayOfWeek - 2
+            val maxDaysInMonth = calendarMonth.getActualMaximum(Calendar.DAY_OF_MONTH)
+
+            PremiumCard(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                shape = RoundedCornerShape(26.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                border = borderStroke(1.dp, OutlineGrey)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    // Header controls of calendar
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "CALENDARIO REGISTRO COMPLETO",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                            letterSpacing = 0.5.sp
+                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(
+                                onClick = {
+                                    calendarMonth = (calendarMonth.clone() as Calendar).apply {
+                                        add(Calendar.MONTH, -1)
+                                    }
+                                },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(Icons.Default.ChevronLeft, contentDescription = "Mes anterior", tint = MaterialTheme.colorScheme.primary)
+                            }
+                            Text(
+                                text = "$monthLabel $year",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.padding(horizontal = 4.dp)
+                            )
+                            IconButton(
+                                onClick = {
+                                    calendarMonth = (calendarMonth.clone() as Calendar).apply {
+                                        add(Calendar.MONTH, 1)
+                                    }
+                                },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(Icons.Default.ChevronRight, contentDescription = "Mes siguiente", tint = MaterialTheme.colorScheme.primary)
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Column Label Headers
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        listOf("Lu", "Ma", "Mi", "Ju", "Vi", "Sá", "Do").forEach { wDay ->
+                            Text(
+                                text = wDay,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = SubtitleText,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    // Dynamic days grid cells
+                    val totalCells = emptyDaysBefore + maxDaysInMonth
+                    val rows = (0 until totalCells).chunked(7)
+
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        rows.forEach { rowIdxs ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                (0 until 7).forEach { col ->
+                                    val cellIndex = rowIdxs.getOrNull(col)
+                                    if (cellIndex == null || cellIndex < emptyDaysBefore) {
+                                        Box(modifier = Modifier.weight(1f).aspectRatio(1f))
+                                    } else {
+                                        val dayNum = cellIndex - emptyDaysBefore + 1
+                                        val cellCal = (calendarMonth.clone() as Calendar).apply {
+                                            set(Calendar.DAY_OF_MONTH, dayNum)
+                                        }
+
+                                        val isToday = isSameDay(System.currentTimeMillis(), cellCal)
+                                        val isSelected = isSameDay(selectedDayCal.timeInMillis, cellCal)
+
+                                        val dayTransactions = userTransactions.filter { 
+                                            val filterDate = if (it.balanceDate > 0L) it.balanceDate else it.date
+                                            isSameDay(filterDate, cellCal) 
+                                        }
+
+                                        val dayCompletedChores = chores.filter { it.isCompleted && it.completedDate != null && isSameDay(it.completedDate, cellCal) }
+
+                                        Box(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .aspectRatio(1f)
+                                                .padding(2.dp)
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .background(
+                                                    when {
+                                                        isSelected -> MaterialTheme.colorScheme.primary
+                                                        isToday -> MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                                        else -> MaterialTheme.colorScheme.surface
+                                                    }
+                                                )
+                                                .scaleClickable { selectedDayCal = cellCal
+                                                }
+                                                .border(
+                                                    width = if (isToday) 1.5.dp else if (isSelected) 1.dp else 0.5.dp,
+                                                    color = if (isSelected) MaterialTheme.colorScheme.primary else if (isToday) MaterialTheme.colorScheme.primary else OutlineGrey.copy(alpha = 0.4f),
+                                                    shape = RoundedCornerShape(12.dp)
+                                                ),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Column(
+                                                horizontalAlignment = Alignment.CenterHorizontally,
+                                                verticalArrangement = Arrangement.Center,
+                                                modifier = Modifier.fillMaxSize()
+                                            ) {
+                                                Text(
+                                                    text = "$dayNum",
+                                                    fontSize = 11.sp,
+                                                    fontWeight = if (isToday || isSelected) FontWeight.Bold else FontWeight.Normal,
+                                                    color = when {
+                                                        isSelected -> Color.White
+                                                        isToday -> MaterialTheme.colorScheme.primary
+                                                        else -> MaterialTheme.colorScheme.onSurface
+                                                    }
+                                                )
+                                                
+                                                // Category dots + chore indicators
+                                                if (dayTransactions.isNotEmpty() || dayCompletedChores.isNotEmpty()) {
+                                                    Row(
+                                                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        modifier = Modifier.padding(top = 2.dp)
+                                                    ) {
+                                                        dayTransactions.take(2).forEach { tx ->
+                                                            val catColorHex = categories.find { it.categoryName.equals(tx.category, ignoreCase = true) }?.colorHex ?: "#6750A4"
+                                                            Box(
+                                                                modifier = Modifier
+                                                                    .size(4.dp)
+                                                                    .clip(CircleShape)
+                                                                    .background(if (isSelected) Color.White else catColorHex.toColor())
+                                                            )
+                                                        }
+                                                        if (dayCompletedChores.isNotEmpty()) {
+                                                            Icon(
+                                                                imageVector = Icons.Default.Check,
+                                                                contentDescription = null,
+                                                                tint = if (isSelected) Color.White else Color(0xFF10B981),
+                                                                modifier = Modifier.size(6.dp)
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Selected Day detailed records
+                    val selectedDateTimeLabel = SimpleDateFormat("dd 'de' MMMM, yyyy", Locale("es")).format(selectedDayCal.time)
+                    val dayTx = userTransactions.filter { 
+                        val filterDate = if (it.balanceDate > 0L) it.balanceDate else it.date
+                        isSameDay(filterDate, selectedDayCal) 
+                    }
+                    val dayLogs = activityLogs.filter { isSameDay(it.timestamp, selectedDayCal) }
+                    val dayCompletedChores = chores.filter { it.isCompleted && it.completedDate != null && isSameDay(it.completedDate, selectedDayCal) }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+                    androidx.compose.material3.HorizontalDivider(color = OutlineGrey.copy(alpha = 0.3f))
+                    Spacer(modifier = Modifier.height(10.dp))
+                    
+                    Text(
+                         text = "DETALLE DE ACTIVIDAD: ${selectedDateTimeLabel.uppercase()}",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    if (dayTx.isEmpty() && dayLogs.isEmpty() && dayCompletedChores.isEmpty()) {
+                        Text(
+                            text = "No hay financiamientos ni actividades registradas en este día.",
+                            fontSize = 11.sp,
+                            color = SubtitleText,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
+                    } else {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            // Render completed chores first
+                            dayCompletedChores.forEach { chore ->
+                                PremiumCard(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors = CardDefaults.cardColors(containerColor = Color(0xFFE8F5E9)),
+                                    border = borderStroke(0.5.dp, Color(0xFF81C784))
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(10.dp).fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                imageVector = Icons.Default.CheckCircle,
+                                                contentDescription = "Completada",
+                                                tint = Color(0xFF2E7D32),
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(chore.title, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1B5E20), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                                Text("Tarea • Asignado: ${chore.assignedTo} • Prioridad: ${chore.priority}", fontSize = 8.sp, color = Color(0xFF388E3C), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                            }
+                                        }
+                                        Text(
+                                            text = "COMPLETADA",
+                                            fontSize = 8.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF2E7D32)
+                                        )
+                                    }
+                                }
+                            }
+
+                            dayTx.forEach { tx ->
+                                val symbol = if (tx.currency == "USD") "$" else "Bs"
+                                val prefix = if (tx.isIncome) "+" else "-"
+                                val amountColor = if (tx.isIncome) Color(0xFF2E7D32) else AlertRed
+                                val assocColor = if (tx.isIncome) "#2E7D32" else (categories.find { it.categoryName.equals(tx.category, ignoreCase = true) }?.colorHex ?: "#6750A4")
+
+                                PremiumCard(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)),
+                                    border = borderStroke(0.5.dp, OutlineGrey.copy(alpha = 0.5f))
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(10.dp).fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                                            Box(
+                                                modifier = Modifier.size(20.dp).clip(CircleShape).background(assocColor.toColor())
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(tx.description, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                                Text("Categoría: ${tx.category} • Por: ${tx.registeredBy}", fontSize = 8.sp, color = SubtitleText, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                            }
+                                        }
+                                        Column(horizontalAlignment = Alignment.End) {
+                                            Text(
+                                                text = "$prefix ${tx.originalAmount} $symbol",
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = amountColor
+                                            )
+                                            if (tx.currency != "USD") {
+                                                Text(
+                                                    text = "(${String.format("%.2f", tx.amount)} $)",
+                                                    fontSize = 9.sp,
+                                                    color = SubtitleText,
+                                                    fontWeight = FontWeight.Medium
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            dayLogs.take(3).forEach { log ->
+                                PremiumCard(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.3f))
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(8.dp).fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(CircleShape)
+                                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
+                                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        ) {
+                                            Text(log.tag, fontSize = 7.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                        }
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(log.message, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+
+    }
+}

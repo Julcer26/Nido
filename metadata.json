@@ -1,0 +1,6 @@
+{
+  "name": "fami",
+  "description": "fami es el espacio premium definitivo para parejas y vida compartida: una suite de finanzas bimoneda de cristal líquido, presupuestos colaborativos, lista de compras y tareas con fluidez interactiva de tiempo real.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
