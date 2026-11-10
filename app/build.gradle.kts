@@ -15,8 +15,8 @@ android {
     applicationId = "com.aistudio.hogarfinanzas.gkpxtw"
     minSdk = 24
     targetSdk = 36
-    versionCode = 30
-    versionName = "1.30"
+    versionCode = 68
+    versionName = "1.68"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

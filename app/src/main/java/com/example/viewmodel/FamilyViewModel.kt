@@ -74,6 +74,55 @@ class FamilyViewModel(
         list.filter { it.createdBy == user } // Notas totalmente privadas
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val recurringPayments: StateFlow<List<com.example.database.RecurringPayment>> = repository.allRecurringPayments
+        .map { list -> list.sortedBy { it.dueDay } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun createOrEditRecurringPayment(payment: com.example.database.RecurringPayment) {
+        viewModelScope.launch {
+            try {
+                repository.insertRecurringPayment(payment, _currentUser.value)
+                notifyUser("Servicio guardado: '${payment.name}'")
+            } catch (e: Exception) {
+                notifyUser("Error al guardar servicio: ${e.localizedMessage}")
+            }
+        }
+    }
+
+    fun deleteRecurringPayment(payment: com.example.database.RecurringPayment) {
+        viewModelScope.launch {
+            try {
+                repository.deleteRecurringPayment(payment, _currentUser.value)
+                notifyUser("Servicio eliminado: '${payment.name}'")
+            } catch (e: Exception) {
+                notifyUser("Error al eliminar servicio: ${e.localizedMessage}")
+            }
+        }
+    }
+
+    fun markRecurringPaymentPaid(payment: com.example.database.RecurringPayment, monthKey: String, amount: Double, currency: String, date: Long) {
+        viewModelScope.launch {
+            try {
+                val alert = repository.markRecurringPaymentPaid(payment, monthKey, amount, currency, date, _currentUser.value)
+                if (alert != null) notifyUser(alert)
+                else notifyUser("Pago registrado: '${payment.name}' para $monthKey")
+            } catch (e: Exception) {
+                notifyUser("Error al registrar pago: ${e.localizedMessage}")
+            }
+        }
+    }
+
+    fun markRecurringPaymentUnpaid(payment: com.example.database.RecurringPayment, monthKey: String) {
+        viewModelScope.launch {
+            try {
+                repository.markRecurringPaymentUnpaid(payment, monthKey, _currentUser.value)
+                notifyUser("Pago desmarcado: '${payment.name}' para $monthKey")
+            } catch (e: Exception) {
+                notifyUser("Error al desmarcar pago: ${e.localizedMessage}")
+            }
+        }
+    }
+
     private val _isRegisteringNlp = MutableStateFlow(false)
     val isRegisteringNlp: StateFlow<Boolean> = _isRegisteringNlp.asStateFlow()
 
@@ -251,8 +300,6 @@ class FamilyViewModel(
         }
     }
 
-
-
     private fun checkDefaultsAndSync() {
         viewModelScope.launch {
             try {
@@ -278,10 +325,10 @@ class FamilyViewModel(
         return repository.uploadReceiptImage(bitmap)
     }
 
-    fun addTransaction(originalAmount: Double, category: String, description: String, currency: String = "USD", isIncome: Boolean = false, date: Long = System.currentTimeMillis(), receiptUrl: String = "", balanceDate: Long = 0L) {
+    fun addTransaction(originalAmount: Double, category: String, description: String, currency: String = "USD", isIncome: Boolean = false, date: Long = System.currentTimeMillis(), receiptUrl: String = "", balanceDate: Long = 0L, items: List<com.example.database.TransactionItem> = emptyList()) {
         viewModelScope.launch {
             val user = _currentUser.value
-            val tx = Transaction(amount = originalAmount, category = category, description = description, date = date, registeredBy = user, currency = currency, originalAmount = originalAmount, isIncome = isIncome, receiptUrl = receiptUrl, balanceDate = balanceDate)
+            val tx = Transaction(amount = originalAmount, category = category, description = description, date = date, registeredBy = user, currency = currency, originalAmount = originalAmount, isIncome = isIncome, receiptUrl = receiptUrl, balanceDate = balanceDate, items = items)
             val alertMessage = repository.insertTransaction(tx, user)
             if (alertMessage != null) notifyUser(alertMessage)
             else notifyUser("¡Guardado!: $originalAmount en '$description'")
@@ -296,10 +343,7 @@ class FamilyViewModel(
             val newName = name.trim()
             var oldCat = categories.value.find { it.categoryName == oldName }
             if (oldName != null && oldName != newName) {
-                // Remove old category if name changed
                 if (oldCat != null) repository.deleteCategory(oldCat, user)
-                
-                // Update transactions to use the new category name
                 val txsToUpdate = transactions.value.filter { it.category == oldName }
                 for (tx in txsToUpdate) {
                     repository.insertTransaction(tx.copy(category = newName), user)
@@ -347,15 +391,17 @@ class FamilyViewModel(
         if (inputText.isBlank()) return
         viewModelScope.launch {
             _isRegisteringNlp.value = true
+            _nlpError.value = null
             try {
                 val user = _currentUser.value
+                val customKey = settings.value.find { it.key == "gemini_api_key" }?.value
                 val categoryNameList = categories.value.map { it.categoryName }.ifEmpty { listOf("Alimentos", "Servicios", "Otros") }
-                val (transaction, error, successMsg) = GeminiParser.parseTextToTransaction(inputText, user, categoryNameList)
+                val (transaction, error, successMsg) = GeminiParser.parseTextToTransaction(inputText, user, categoryNameList, customKey)
                 if (error != null) {
                     _nlpError.value = error
                 } else if (transaction != null) {
                     repository.insertTransaction(transaction, user)
-                    notifyUser("IA registró gasto/ingreso exitosamente.")
+                    notifyUser(successMsg.ifBlank { "IA registró gasto/ingreso exitosamente." })
                 }
             } catch (e: Exception) {
                 _nlpError.value = "Error: ${e.message}"
@@ -371,7 +417,8 @@ class FamilyViewModel(
             chore.isPrivate = isPrivate
             repository.insertChore(chore, _currentUser.value)
         }
-    }fun toggleChoreCompletion(chore: Chore) { if (!chore.isCompleted) triggerConfetti()
+    }
+    fun toggleChoreCompletion(chore: Chore) { if (!chore.isCompleted) triggerConfetti()
         viewModelScope.launch { repository.updateChoreStatus(chore.id, chore.title, !chore.isCompleted, _currentUser.value) } }
     fun deleteChore(chore: Chore) { viewModelScope.launch { repository.deleteChore(chore, _currentUser.value) } }
     fun editChore(chore: Chore) { viewModelScope.launch { repository.insertChore(chore, _currentUser.value) } }
@@ -382,7 +429,8 @@ class FamilyViewModel(
             item.isPrivate = isPrivate
             repository.insertShoppingItem(item, _currentUser.value)
         }
-    }fun toggleShoppingItemBought(item: ShoppingItem) { if (!item.isBought) triggerConfetti()
+    }
+    fun toggleShoppingItemBought(item: ShoppingItem) { if (!item.isBought) triggerConfetti()
         viewModelScope.launch { repository.updateShoppingItemStatus(item.id, item.name, !item.isBought, _currentUser.value) } }
     fun deleteShoppingItem(item: ShoppingItem) { viewModelScope.launch { repository.deleteShoppingItem(item, _currentUser.value) } }
     fun editShoppingItem(item: ShoppingItem) { viewModelScope.launch { repository.insertShoppingItem(item, _currentUser.value) } }

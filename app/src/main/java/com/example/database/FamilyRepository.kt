@@ -77,12 +77,9 @@ class FamilyRepository {
                                 obj is ShoppingItem -> (obj as ShoppingItem).copy(id = key) as T
                                 obj is ActivityLog -> (obj as ActivityLog).copy(id = key) as T
                                 obj is CategoryDetail -> (obj as CategoryDetail).copy(categoryName = key) as T
-                                obj?.javaClass?.simpleName == "Chore" -> {
-                                    val m = obj.javaClass.getMethod("copy", String::class.java, String::class.java, String::class.java, Boolean::class.java, Long::class.java, Long::class.javaObjectType, String::class.java, String::class.java, String::class.java)
-                                    // It's safer to just let the above handle it. If it fails, we know it's a structural issue.
-                                    // I'll log if the ID is somehow empty.
-                                    obj
-                                }
+                                obj is RecurringPayment -> (obj as RecurringPayment).copy(id = key) as T
+                                obj is Goal -> (obj as Goal).copy(id = key) as T
+                                obj is Note -> (obj as Note).copy(id = key) as T
                                 else -> obj
                             }
                             
@@ -120,6 +117,86 @@ class FamilyRepository {
     val allLogs: Flow<List<ActivityLog>> = observeList("activity_logs")
     val allGoals: Flow<List<Goal>> = observeList("goals")
     val allNotes: Flow<List<Note>> = observeList("notes")
+    val allRecurringPayments: Flow<List<RecurringPayment>> = observeList("recurring_payments")
+
+    suspend fun insertRecurringPayment(payment: RecurringPayment, user: String) {
+        val ref = getFamilyRef("recurring_payments") ?: return
+        val pushRef = if (payment.id.isEmpty()) ref.push() else ref.child(payment.id)
+        val finalized = payment.copy(id = pushRef.key ?: "")
+        pushRef.setValue(finalized).await()
+        insertLog(ActivityLog(tag = "FINANZAS", message = "$user configuró el pago recurrente '${payment.name}'", user = user))
+    }
+
+    suspend fun deleteRecurringPayment(payment: RecurringPayment, user: String) {
+        val ref = getFamilyRef("recurring_payments") ?: return
+        if (payment.id.isNotEmpty()) {
+            ref.child(payment.id).removeValue().await()
+            insertLog(ActivityLog(tag = "FINANZAS", message = "$user eliminó el pago recurrente '${payment.name}'", user = user))
+        }
+    }
+
+    suspend fun markRecurringPaymentPaid(
+        payment: RecurringPayment,
+        monthKey: String,
+        amount: Double,
+        currency: String,
+        date: Long,
+        user: String
+    ): String? {
+        val newPaidMonths = payment.paidMonths.toMutableMap()
+        newPaidMonths[monthKey] = true
+
+        val generatedTxId = getFamilyRef("transactions")?.push()?.key ?: ""
+        val tx = Transaction(
+            id = generatedTxId,
+            amount = amount,
+            category = payment.category.ifBlank { "Servicios" },
+            description = "${payment.name} ($monthKey)",
+            currency = currency,
+            originalAmount = amount,
+            isIncome = false,
+            isRecurring = true,
+            date = date,
+            balanceDate = date,
+            registeredBy = user
+        )
+        val alert = insertTransaction(tx, user)
+
+        val newPaidTxIds = payment.paidTransactionIds.toMutableMap()
+        if (generatedTxId.isNotEmpty()) {
+            newPaidTxIds[monthKey] = generatedTxId
+        }
+
+        val updatedPayment = payment.copy(
+            paidMonths = newPaidMonths,
+            paidTransactionIds = newPaidTxIds
+        )
+        insertRecurringPayment(updatedPayment, user)
+        return alert
+    }
+
+    suspend fun markRecurringPaymentUnpaid(
+        payment: RecurringPayment,
+        monthKey: String,
+        user: String
+    ) {
+        val newPaidMonths = payment.paidMonths.toMutableMap()
+        newPaidMonths.remove(monthKey)
+
+        val txId = payment.paidTransactionIds[monthKey]
+        if (!txId.isNullOrEmpty()) {
+            deleteTransaction(Transaction(id = txId), user)
+        }
+
+        val newPaidTxIds = payment.paidTransactionIds.toMutableMap()
+        newPaidTxIds.remove(monthKey)
+
+        val updatedPayment = payment.copy(
+            paidMonths = newPaidMonths,
+            paidTransactionIds = newPaidTxIds
+        )
+        insertRecurringPayment(updatedPayment, user)
+    }
 
     suspend fun insertTransaction(transaction: Transaction, user: String): String? {
         val transactionsRef = getFamilyRef("transactions") ?: return "No hay familia activa"

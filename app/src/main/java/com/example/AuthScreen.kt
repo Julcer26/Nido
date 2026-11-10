@@ -40,20 +40,21 @@ fun AuthScreen(viewModel: FamilyViewModel) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFFF8FAFC)),
+            .background(MaterialTheme.colorScheme.background),
         contentAlignment = Alignment.Center
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(24.dp).fillMaxWidth()
+            modifier = Modifier
+                .padding(24.dp)
+                .fillMaxWidth()
         ) {
             Image(
                 painter = painterResource(id = R.drawable.ic_nido_logo),
                 contentDescription = "Nido Logo",
-                modifier = Modifier
-                    .size(120.dp)
+                modifier = Modifier.size(110.dp)
             )
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(28.dp))
 
             when (currentMode) {
                 "select" -> SelectModeContent(
@@ -91,39 +92,40 @@ fun SelectModeContent(onCreateFamily: () -> Unit, onJoinFamily: () -> Unit, onLo
         text = "Bienvenido a Nido",
         fontSize = 24.sp,
         fontWeight = FontWeight.Bold,
-        color = Color(0xFF1E293B)
+        color = MaterialTheme.colorScheme.onBackground,
+        letterSpacing = (-0.5).sp
     )
     Text(
         text = "Organiza las finanzas y tareas de tu hogar",
-        fontSize = 14.sp,
-        color = Color(0xFF64748B),
+        fontSize = 13.sp,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
         textAlign = TextAlign.Center,
-        modifier = Modifier.padding(top = 8.dp, bottom = 32.dp)
+        modifier = Modifier.padding(top = 6.dp, bottom = 28.dp)
     )
 
     Button(
         onClick = onCreateFamily,
-        modifier = Modifier.fillMaxWidth().height(56.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6366F1)),
-        shape = RoundedCornerShape(12.dp)
+        modifier = Modifier.fillMaxWidth().height(52.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+        shape = RoundedCornerShape(16.dp)
     ) {
-        Text("Crear Nuevo Nido", fontSize = 16.sp)
+        Text("Crear Nuevo Nido", fontSize = 15.sp, fontWeight = FontWeight.Bold)
     }
     
-    Spacer(modifier = Modifier.height(16.dp))
+    Spacer(modifier = Modifier.height(12.dp))
     
     OutlinedButton(
         onClick = onJoinFamily,
-        modifier = Modifier.fillMaxWidth().height(56.dp),
-        shape = RoundedCornerShape(12.dp)
+        modifier = Modifier.fillMaxWidth().height(52.dp),
+        shape = RoundedCornerShape(16.dp)
     ) {
-        Text("Unirse a un Nido", fontSize = 16.sp, color = Color(0xFF6366F1))
+        Text("Unirse a un Nido", fontSize = 15.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
     }
     
-    Spacer(modifier = Modifier.height(24.dp))
+    Spacer(modifier = Modifier.height(20.dp))
     
     TextButton(onClick = onLoginExisting) {
-        Text("¿Ya tienes un perfil? Iniciar Sesión", fontSize = 14.sp, color = Color(0xFF64748B))
+        Text("¿Ya tienes un perfil? Iniciar Sesión", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -133,7 +135,6 @@ fun LoginContent(viewModel: FamilyViewModel, onReset: () -> Unit) {
     val context = LocalContext.current as FragmentActivity
 
     LaunchedEffect(Unit) {
-        // Intentar biometría automáticamente
         showBiometricPrompt(context, onSuccess = {
             viewModel.loginBiometric()
         })
@@ -143,7 +144,8 @@ fun LoginContent(viewModel: FamilyViewModel, onReset: () -> Unit) {
         text = "Desbloquear Nido",
         fontSize = 22.sp,
         fontWeight = FontWeight.Bold,
-        color = Color(0xFF1E293B)
+        color = MaterialTheme.colorScheme.onBackground,
+        letterSpacing = (-0.3).sp
     )
     Spacer(modifier = Modifier.height(16.dp))
 
@@ -154,30 +156,33 @@ fun LoginContent(viewModel: FamilyViewModel, onReset: () -> Unit) {
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
         visualTransformation = PasswordVisualTransformation(),
         singleLine = true,
+        shape = RoundedCornerShape(16.dp),
         modifier = Modifier.fillMaxWidth()
     )
     
-    Spacer(modifier = Modifier.height(24.dp))
+    Spacer(modifier = Modifier.height(20.dp))
     
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
         IconButton(
             onClick = {
                 showBiometricPrompt(context, onSuccess = {
                     viewModel.loginBiometric()
                 })
             },
-            modifier = Modifier.size(56.dp).background(Color(0xFFE2E8F0), RoundedCornerShape(12.dp))
+            modifier = Modifier
+                .size(52.dp)
+                .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(16.dp))
         ) {
-            Icon(Icons.Default.Fingerprint, contentDescription = "Huella", tint = Color(0xFF6366F1))
+            Icon(Icons.Default.Fingerprint, contentDescription = "Huella", tint = MaterialTheme.colorScheme.primary)
         }
 
         Button(
             onClick = { viewModel.loginWithPin(pin) },
-            modifier = Modifier.weight(1f).height(56.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6366F1)),
-            shape = RoundedCornerShape(12.dp)
+            modifier = Modifier.weight(1f).height(52.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+            shape = RoundedCornerShape(16.dp)
         ) {
-            Text("Entrar", fontSize = 16.sp)
+            Text("Entrar", fontSize = 15.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -192,7 +197,8 @@ fun CreateFamilyContent(viewModel: FamilyViewModel, onBack: () -> Unit) {
         text = "Crear Nuevo Nido",
         fontSize = 22.sp,
         fontWeight = FontWeight.Bold,
-        color = Color(0xFF1E293B)
+        color = MaterialTheme.colorScheme.onBackground,
+        letterSpacing = (-0.3).sp
     )
     Spacer(modifier = Modifier.height(16.dp))
 
@@ -202,18 +208,20 @@ fun CreateFamilyContent(viewModel: FamilyViewModel, onBack: () -> Unit) {
         label = { Text("Correo Electrónico") },
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+        shape = RoundedCornerShape(16.dp),
         modifier = Modifier.fillMaxWidth()
     )
-    Spacer(modifier = Modifier.height(8.dp))
+    Spacer(modifier = Modifier.height(10.dp))
     OutlinedTextField(
         value = password,
         onValueChange = { password = it },
         label = { Text("Contraseña (mínimo 6 caracteres)") },
         visualTransformation = PasswordVisualTransformation(),
         singleLine = true,
+        shape = RoundedCornerShape(16.dp),
         modifier = Modifier.fillMaxWidth()
     )
-    Spacer(modifier = Modifier.height(8.dp))
+    Spacer(modifier = Modifier.height(10.dp))
     OutlinedTextField(
         value = pin,
         onValueChange = { if (it.length <= 5) pin = it },
@@ -221,21 +229,22 @@ fun CreateFamilyContent(viewModel: FamilyViewModel, onBack: () -> Unit) {
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
         visualTransformation = PasswordVisualTransformation(),
         singleLine = true,
+        shape = RoundedCornerShape(16.dp),
         modifier = Modifier.fillMaxWidth()
     )
     
-    Spacer(modifier = Modifier.height(24.dp))
+    Spacer(modifier = Modifier.height(20.dp))
     
     Button(
         onClick = { if (email.isNotBlank() && password.length >= 6 && pin.length == 5) viewModel.createFamily(email, pin, password) },
-        modifier = Modifier.fillMaxWidth().height(56.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6366F1)),
-        shape = RoundedCornerShape(12.dp)
+        modifier = Modifier.fillMaxWidth().height(52.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+        shape = RoundedCornerShape(16.dp)
     ) {
-        Text("Crear y Entrar", fontSize = 16.sp)
+        Text("Crear y Entrar", fontSize = 15.sp, fontWeight = FontWeight.Bold)
     }
     TextButton(onClick = onBack, modifier = Modifier.padding(top = 8.dp)) {
-        Text("Volver")
+        Text("Volver", color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -252,7 +261,8 @@ fun JoinFamilyContent(viewModel: FamilyViewModel, onBack: () -> Unit) {
         text = "Unirse a Nido",
         fontSize = 22.sp,
         fontWeight = FontWeight.Bold,
-        color = Color(0xFF1E293B)
+        color = MaterialTheme.colorScheme.onBackground,
+        letterSpacing = (-0.3).sp
     )
     Spacer(modifier = Modifier.height(16.dp))
 
@@ -261,35 +271,39 @@ fun JoinFamilyContent(viewModel: FamilyViewModel, onBack: () -> Unit) {
         onValueChange = { code = it },
         label = { Text("Código de Familia") },
         singleLine = true,
+        shape = RoundedCornerShape(16.dp),
         modifier = Modifier.fillMaxWidth()
     )
-    Spacer(modifier = Modifier.height(8.dp))
+    Spacer(modifier = Modifier.height(10.dp))
     OutlinedTextField(
         value = name,
         onValueChange = { name = it },
         label = { Text("Tu Nombre") },
         singleLine = true,
+        shape = RoundedCornerShape(16.dp),
         modifier = Modifier.fillMaxWidth()
     )
-    Spacer(modifier = Modifier.height(8.dp))
+    Spacer(modifier = Modifier.height(10.dp))
     OutlinedTextField(
         value = email,
         onValueChange = { email = it },
         label = { Text("Correo Electrónico") },
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+        shape = RoundedCornerShape(16.dp),
         modifier = Modifier.fillMaxWidth()
     )
-    Spacer(modifier = Modifier.height(8.dp))
+    Spacer(modifier = Modifier.height(10.dp))
     OutlinedTextField(
         value = password,
         onValueChange = { password = it },
         label = { Text("Contraseña (mínimo 6 caracteres)") },
         visualTransformation = PasswordVisualTransformation(),
         singleLine = true,
+        shape = RoundedCornerShape(16.dp),
         modifier = Modifier.fillMaxWidth()
     )
-    Spacer(modifier = Modifier.height(8.dp))
+    Spacer(modifier = Modifier.height(10.dp))
     OutlinedTextField(
         value = pin,
         onValueChange = { if (it.length <= 5) pin = it },
@@ -297,18 +311,19 @@ fun JoinFamilyContent(viewModel: FamilyViewModel, onBack: () -> Unit) {
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
         visualTransformation = PasswordVisualTransformation(),
         singleLine = true,
+        shape = RoundedCornerShape(16.dp),
         modifier = Modifier.fillMaxWidth()
     )
     
-    Spacer(modifier = Modifier.height(24.dp))
+    Spacer(modifier = Modifier.height(20.dp))
     
     Button(
         onClick = { if (code.isNotBlank() && name.isNotBlank() && email.isNotBlank() && password.length >= 6 && pin.length == 5) viewModel.joinFamily(code, name, pin, email, password) },
-        modifier = Modifier.fillMaxWidth().height(56.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6366F1)),
-        shape = RoundedCornerShape(12.dp)
+        modifier = Modifier.fillMaxWidth().height(52.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+        shape = RoundedCornerShape(16.dp)
     ) {
-        Text("Unirse", fontSize = 16.sp)
+        Text("Unirse", fontSize = 15.sp, fontWeight = FontWeight.Bold)
     }
     TextButton(
         onClick = {
@@ -327,10 +342,10 @@ fun JoinFamilyContent(viewModel: FamilyViewModel, onBack: () -> Unit) {
         },
         modifier = Modifier.padding(top = 4.dp)
     ) {
-        Text("¿Olvidaste la contraseña de Firebase?", color = Color(0xFF6366F1))
+        Text("¿Olvidaste la contraseña de Firebase?", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
     }
     TextButton(onClick = onBack, modifier = Modifier.padding(top = 0.dp)) {
-        Text("Volver")
+        Text("Volver", color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -358,7 +373,6 @@ private fun showBiometricPrompt(activity: FragmentActivity, onSuccess: () -> Uni
     biometricPrompt.authenticate(promptInfo)
 }
 
-
 @Composable
 fun LoginExistingFamilyContent(viewModel: FamilyViewModel, onBack: () -> Unit) {
     var email by remember { mutableStateOf("") }
@@ -369,12 +383,13 @@ fun LoginExistingFamilyContent(viewModel: FamilyViewModel, onBack: () -> Unit) {
         text = "Iniciar Sesión",
         fontSize = 22.sp,
         fontWeight = FontWeight.Bold,
-        color = Color(0xFF1E293B)
+        color = MaterialTheme.colorScheme.onBackground,
+        letterSpacing = (-0.3).sp
     )
     Text(
         text = "Ingresa con tu correo y contraseña registrados",
         fontSize = 12.sp,
-        color = Color(0xFF64748B),
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(bottom = 16.dp, top = 4.dp)
     )
 
@@ -384,18 +399,20 @@ fun LoginExistingFamilyContent(viewModel: FamilyViewModel, onBack: () -> Unit) {
         label = { Text("Correo Electrónico") },
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+        shape = RoundedCornerShape(16.dp),
         modifier = Modifier.fillMaxWidth()
     )
-    Spacer(modifier = Modifier.height(8.dp))
+    Spacer(modifier = Modifier.height(10.dp))
     OutlinedTextField(
         value = password,
         onValueChange = { password = it },
         label = { Text("Contraseña") },
         visualTransformation = PasswordVisualTransformation(),
         singleLine = true,
+        shape = RoundedCornerShape(16.dp),
         modifier = Modifier.fillMaxWidth()
     )
-    Spacer(modifier = Modifier.height(8.dp))
+    Spacer(modifier = Modifier.height(10.dp))
     OutlinedTextField(
         value = pin,
         onValueChange = { if (it.length <= 5) pin = it },
@@ -403,20 +420,21 @@ fun LoginExistingFamilyContent(viewModel: FamilyViewModel, onBack: () -> Unit) {
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
         visualTransformation = PasswordVisualTransformation(),
         singleLine = true,
+        shape = RoundedCornerShape(16.dp),
         modifier = Modifier.fillMaxWidth()
     )
     
-    Spacer(modifier = Modifier.height(24.dp))
+    Spacer(modifier = Modifier.height(20.dp))
     
     Button(
         onClick = { if (email.isNotBlank() && password.length >= 6 && pin.length == 5) viewModel.loginExisting(email, password, pin) },
-        modifier = Modifier.fillMaxWidth().height(56.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6366F1)),
-        shape = RoundedCornerShape(12.dp)
+        modifier = Modifier.fillMaxWidth().height(52.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+        shape = RoundedCornerShape(16.dp)
     ) {
-        Text("Entrar", fontSize = 16.sp)
+        Text("Entrar", fontSize = 15.sp, fontWeight = FontWeight.Bold)
     }
     TextButton(onClick = onBack, modifier = Modifier.padding(top = 8.dp)) {
-        Text("Volver")
+        Text("Volver", color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

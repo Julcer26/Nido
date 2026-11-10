@@ -2,6 +2,12 @@ package com.example.database
 
 import com.google.firebase.database.PropertyName
 
+data class TransactionItem(
+    val name: String = "",
+    val amount: Double = 0.0,
+    val category: String = ""
+)
+
 data class Transaction(
     var id: String = "",
     val amount: Double = 0.0,
@@ -17,7 +23,8 @@ data class Transaction(
     @get:PropertyName("isIncome") @set:PropertyName("isIncome")
     var isIncome: Boolean = false,
     val receiptUrl: String = "",
-    val balanceDate: Long = 0L
+    val balanceDate: Long = 0L,
+    val items: List<TransactionItem> = emptyList()
 )
 
 data class CategoryDetail(
@@ -99,3 +106,17 @@ data class Note(
     @get:PropertyName("isPrivate") @set:PropertyName("isPrivate")
     var isPrivate: Boolean = true
 )
+
+data class RecurringPayment(
+    var id: String = "",
+    val name: String = "",
+    val defaultAmount: Double = 0.0,
+    val currency: String = "USD",
+    val category: String = "Servicios",
+    val dueDay: Int = 5,
+    val iconEmoji: String = "⚡",
+    val createdBy: String = "",
+    val paidMonths: Map<String, Boolean> = emptyMap(),
+    val paidTransactionIds: Map<String, String> = emptyMap()
+)
+
