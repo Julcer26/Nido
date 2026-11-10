@@ -488,7 +488,31 @@ class FamilyViewModel(
         }
     }
     fun editNote(note: Note) { viewModelScope.launch { repository.insertNote(note, _currentUser.value) } }
-    fun deleteNote(note: Note) { viewModelScope.launch { repository.deleteNote(note, _currentUser.value) } }
+    fun deleteUserAccount(onSuccess: () -> Unit, onError: (String) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
+                val user = auth.currentUser
+                val uid = user?.uid
+                if (uid != null) {
+                    try {
+                        com.google.firebase.database.FirebaseDatabase.getInstance().reference
+                            .child("users").child(uid).removeValue().await()
+                    } catch (e: Exception) {
+                        // Continuar si ya fue removido
+                    }
+                }
+                user?.delete()?.await()
+                dataStoreManager.clearAuthData()
+                _isAuthenticated.value = false
+                _familyId.value = null
+                _currentUser.value = ""
+                onSuccess()
+            } catch (e: Exception) {
+                onError(e.localizedMessage ?: "Error al eliminar la cuenta. Se requiere reautenticación.")
+            }
+        }
+    }
 }
 
 class FamilyViewModelFactory(private val context: Context) : ViewModelProvider.Factory {

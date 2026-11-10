@@ -615,8 +615,17 @@ fun MainScreen(viewModel: FamilyViewModel) {
                         confirmButton = {
                             TextButton(onClick = {
                                 showUpdateDialog = false
-                                android.widget.Toast.makeText(context, "Descargando actualización...", android.widget.Toast.LENGTH_LONG).show()
-                                OtaUpdateManager.downloadAndInstallUpdate(context, updateUrl)
+                                try {
+                                    val playIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("market://details?id=${context.packageName}"))
+                                    context.startActivity(playIntent)
+                                } catch (e: Exception) {
+                                    try {
+                                        val webIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(if (updateUrl.startsWith("http")) updateUrl else "https://play.google.com/store/apps/details?id=${context.packageName}"))
+                                        context.startActivity(webIntent)
+                                    } catch (e2: Exception) {
+                                        android.widget.Toast.makeText(context, "No se pudo abrir el enlace de actualización.", android.widget.Toast.LENGTH_SHORT).show()
+                                    }
+                                }
                             }) {
                                 Text("Actualizar")
                             }
@@ -4374,6 +4383,9 @@ fun ConfigMainContent(
     viewModel: FamilyViewModel,
     modifier: Modifier = Modifier
 ) {
+    var showDeleteAccountDialog by remember { mutableStateOf(false) }
+    var deleteAccountError by remember { mutableStateOf<String?>(null) }
+
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 150.dp),
@@ -4516,13 +4528,48 @@ fun ConfigMainContent(
                             }
                         }
                         Spacer(modifier = Modifier.height(12.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    val browserIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://hogar-finanzas-2026.web.app/privacy.html"))
+                                    context.startActivity(browserIntent)
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Privacidad", fontSize = 11.sp)
+                            }
+                            OutlinedButton(
+                                onClick = {
+                                    val browserIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://hogar-finanzas-2026.web.app/terms.html"))
+                                    context.startActivity(browserIntent)
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Términos", fontSize = 11.sp)
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
                         Button(
                             onClick = { viewModel.logout() },
-                            colors = ButtonDefaults.buttonColors(containerColor = AlertRed),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
                             modifier = Modifier.fillMaxWidth() ){
                             Icon(Icons.Default.Logout, contentDescription = "Cerrar Sesión", modifier = Modifier.size(14.dp))
                             Spacer(modifier = Modifier.width(6.dp))
                             Text("Cerrar Sesión", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedButton(
+                            onClick = { showDeleteAccountDialog = true },
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = AlertRed),
+                            border = BorderStroke(1.dp, AlertRed.copy(alpha = 0.5f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.DeleteForever, contentDescription = "Eliminar Cuenta", modifier = Modifier.size(14.dp), tint = AlertRed)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Eliminar mi Cuenta y Datos", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = AlertRed)
                         }
                     }
                 }
@@ -4935,6 +4982,51 @@ fun ConfigTab(viewModel: FamilyViewModel) {
                 }
             },
             containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    }
+
+    if (showDeleteAccountDialog) {
+        AlertDialog(
+            onDismissRequest = { 
+                showDeleteAccountDialog = false 
+                deleteAccountError = null
+            },
+            title = { Text("¿Eliminar tu Cuenta?", color = AlertRed, fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    Text("Esta acción es irreversible y permanente conforme a las políticas de Google Play. Se eliminarán tus credenciales de acceso, tus comprobantes en la nube y tus preferencias.")
+                    deleteAccountError?.let { err ->
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(err, color = AlertRed, fontSize = 12.sp)
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.deleteUserAccount(
+                            onSuccess = {
+                                showDeleteAccountDialog = false
+                                android.widget.Toast.makeText(context, "Cuenta eliminada correctamente", android.widget.Toast.LENGTH_LONG).show()
+                            },
+                            onError = { err ->
+                                deleteAccountError = err
+                            }
+                        )
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = AlertRed)
+                ) {
+                    Text("Sí, Eliminar Cuenta")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { 
+                    showDeleteAccountDialog = false 
+                    deleteAccountError = null
+                }) {
+                    Text("Cancelar")
+                }
+            }
         )
     }
 }
