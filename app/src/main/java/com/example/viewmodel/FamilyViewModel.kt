@@ -227,12 +227,6 @@ class FamilyViewModel(
         viewModelScope.launch {
             val code = familyCode.trim().uppercase()
             try {
-                val familyExists = repository.checkFamilyExists(code)
-                if (!familyExists) {
-                    notifyUser("Código familiar no encontrado. Verifica e intenta de nuevo.")
-                    return@launch
-                }
-                
                 val authResult = try {
                     com.google.firebase.auth.FirebaseAuth.getInstance()
                         .createUserWithEmailAndPassword(email.trim(), password).await()
@@ -241,14 +235,14 @@ class FamilyViewModel(
                         .signInWithEmailAndPassword(email.trim(), password).await()
                 }
                 val uid = authResult.user?.uid ?: throw Exception("No se pudo obtener el UID")
-                
-                repository.registerUserMapping(uid, code, name.trim())
+
                 repository.registerFamilyMember(code, uid)
-                
+                repository.registerUserMapping(uid, code, name.trim())
+
                 dataStoreManager.saveAuthData(code, name.trim(), pin)
                 _familyId.value = code
                 repository.setFamilyId(code)
-                
+
                 repository.insertProfile(UserProfile(name.trim(), "#EFB8C8"), name.trim())
                 _currentUser.value = name.trim()
                 _isAuthenticated.value = true
