@@ -4537,7 +4537,7 @@ fun ConfigMainContent(
                         ) {
                             OutlinedButton(
                                 onClick = {
-                                    val browserIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://hogar-finanzas-2026.web.app/privacy.html"))
+                                    val browserIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://julcer26.github.io/Nido/privacy.html"))
                                     context.startActivity(browserIntent)
                                 },
                                 modifier = Modifier.weight(1f)
@@ -4546,7 +4546,7 @@ fun ConfigMainContent(
                             }
                             OutlinedButton(
                                 onClick = {
-                                    val browserIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://hogar-finanzas-2026.web.app/terms.html"))
+                                    val browserIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://julcer26.github.io/Nido/terms.html"))
                                     context.startActivity(browserIntent)
                                 },
                                 modifier = Modifier.weight(1f)

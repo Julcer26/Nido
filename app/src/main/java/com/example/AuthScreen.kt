@@ -43,8 +43,8 @@ import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.viewmodel.FamilyViewModel
 
-private const val PRIVACY_URL = "https://hogar-finanzas-2026.web.app/privacy.html"
-private const val TERMS_URL = "https://hogar-finanzas-2026.web.app/terms.html"
+private const val PRIVACY_URL = "https://julcer26.github.io/Nido/privacy.html"
+private const val TERMS_URL = "https://julcer26.github.io/Nido/terms.html"
 
 @Composable
 fun AuthScreen(viewModel: FamilyViewModel) {
