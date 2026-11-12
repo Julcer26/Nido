@@ -22,16 +22,24 @@ android {
   }
 
   signingConfigs {
+    getByName("debug") {
+      storeFile = file("nido-release-key.jks")
+      storePassword = System.getenv("STORE_PASSWORD") ?: "nido2026"
+      keyAlias = "nido"
+      keyPassword = System.getenv("KEY_PASSWORD") ?: "nido2026"
+    }
     create("release") {
-      val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
-      storeFile = file(keystorePath)
-      storePassword = System.getenv("STORE_PASSWORD")
-      keyAlias = "upload"
-      keyPassword = System.getenv("KEY_PASSWORD")
+      storeFile = file("nido-release-key.jks")
+      storePassword = System.getenv("STORE_PASSWORD") ?: "nido2026"
+      keyAlias = "nido"
+      keyPassword = System.getenv("KEY_PASSWORD") ?: "nido2026"
     }
   }
 
   buildTypes {
+    debug {
+      signingConfig = signingConfigs.getByName("debug")
+    }
     release {
       isCrunchPngs = false
       isMinifyEnabled = false
