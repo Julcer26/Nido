@@ -12,11 +12,11 @@ android {
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
   defaultConfig {
-    applicationId = "com.aistudio.hogarfinanzas.gkpxtw"
+    applicationId = "com.nido.finanzas"
     minSdk = 24
-    targetSdk = 36
-    versionCode = 69
-    versionName = "1.69"
+    targetSdk = 35
+    versionCode = 70
+    versionName = "1.70"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
