@@ -4,9 +4,9 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CAMERA" />
-    <!-- NOTA: REQUEST_INSTALL_PACKAGES está prohibido en Google Play Store (Device & Network Abuse Policy).
-         Para la tienda oficial las actualizaciones se realizan mediante Google Play Console. -->
-    <!-- <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" /> -->
+    <!-- Para uso personal / OTA directa se mantiene activo REQUEST_INSTALL_PACKAGES.
+         IMPORTANTE: Justo antes de generar el .aab para Google Play Store, comenta la línea de abajo. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />

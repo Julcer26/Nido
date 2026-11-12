@@ -615,15 +615,18 @@ fun MainScreen(viewModel: FamilyViewModel) {
                         confirmButton = {
                             TextButton(onClick = {
                                 showUpdateDialog = false
-                                try {
-                                    val playIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("market://details?id=${context.packageName}"))
-                                    context.startActivity(playIntent)
-                                } catch (e: Exception) {
+                                if (updateUrl.isNotEmpty() && !updateUrl.contains("play.google.com")) {
+                                    // Modo OTA directo (descarga e instala el APK automáticamente)
+                                    android.widget.Toast.makeText(context, "Descargando actualización OTA...", android.widget.Toast.LENGTH_LONG).show()
+                                    OtaUpdateManager.downloadAndInstallUpdate(context, updateUrl)
+                                } else {
+                                    // Modo Google Play Store
                                     try {
-                                        val webIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(if (updateUrl.startsWith("http")) updateUrl else "https://play.google.com/store/apps/details?id=${context.packageName}"))
+                                        val playIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("market://details?id=${context.packageName}"))
+                                        context.startActivity(playIntent)
+                                    } catch (e: Exception) {
+                                        val webIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://play.google.com/store/apps/details?id=${context.packageName}"))
                                         context.startActivity(webIntent)
-                                    } catch (e2: Exception) {
-                                        android.widget.Toast.makeText(context, "No se pudo abrir el enlace de actualización.", android.widget.Toast.LENGTH_SHORT).show()
                                     }
                                 }
                             }) {
