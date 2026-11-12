@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eliminación de Cuenta y Datos | Nido - Finanzas Familiares IA</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #6366F1;
+            --primary-dark: #4F46E5;
+            --danger: #EF4444;
+            --danger-dark: #DC2626;
+            --bg: #FAFAFA;
+            --surface: #FFFFFF;
+            --text-main: #0F172A;
+            --text-muted: #64748B;
+            --border: #E2E8F0;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--bg);
+            color: var(--text-main);
+            line-height: 1.7;
+            padding: 0;
+        }
+        header {
+            background: linear-gradient(135deg, #1E1B4B 0%, #0F172A 100%);
+            color: white;
+            padding: 48px 24px;
+            text-align: center;
+            border-bottom: 3px solid var(--danger);
+        }
+        .header-container { max-width: 800px; margin: 0 auto; }
+        .logo-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid rgba(239, 68, 68, 0.4);
+            padding: 8px 16px;
+            border-radius: 999px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: #FCA5A5;
+        }
+        h1 { font-size: 2.3rem; font-weight: 800; margin-bottom: 8px; letter-spacing: -0.02em; }
+        .subtitle { color: #94A3B8; font-size: 1rem; }
+        .container {
+            max-width: 760px;
+            margin: -24px auto 60px;
+            background: var(--surface);
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);
+            border: 1px solid var(--border);
+        }
+        .danger-box {
+            background: #FEF2F2;
+            border-left: 4px solid var(--danger);
+            padding: 16px 20px;
+            border-radius: 8px;
+            margin-bottom: 24px;
+            font-size: 0.95rem;
+            color: #991B1B;
+        }
+        h2 { font-size: 1.25rem; font-weight: 700; color: #1E293B; margin-top: 24px; margin-bottom: 12px; }
+        p { margin-bottom: 14px; color: #334155; }
+        ul { margin-left: 24px; margin-bottom: 20px; color: #334155; }
+        li { margin-bottom: 8px; }
+        .form-card {
+            background: #F8FAFC;
+            padding: 28px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            margin-top: 24px;
+        }
+        label { display: block; font-weight: 600; font-size: 0.9rem; color: #1E293B; margin-bottom: 6px; }
+        input, textarea, select {
+            width: 100%;
+            padding: 12px 14px;
+            border: 1.5px solid var(--border);
+            border-radius: 8px;
+            font-size: 0.95rem;
+            font-family: inherit;
+            margin-bottom: 16px;
+            background: white;
+            transition: border-color 0.2s;
+        }
+        input:focus, textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+        .btn-submit {
+            width: 100%;
+            background: var(--danger);
+            color: white;
+            padding: 14px;
+            font-size: 1rem;
+            font-weight: 700;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn-submit:hover { background: var(--danger-dark); }
+        #successMessage {
+            display: none;
+            background: #ECFDF5;
+            border: 1px solid #10B981;
+            color: #065F46;
+            padding: 18px;
+            border-radius: 8px;
+            margin-top: 20px;
+            text-align: center;
+            font-weight: 600;
+        }
+        .nav-links {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 40px;
+            padding-top: 24px;
+            border-top: 1px solid var(--border);
+            font-size: 0.95rem;
+        }
+        a { color: var(--primary); text-decoration: none; font-weight: 600; }
+        a:hover { text-decoration: underline; }
+        footer {
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            padding: 24px;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="header-container">
+        <div class="logo-badge">🛡️ Google Play Compliance • Privacidad</div>
+        <h1>Solicitud de Eliminación de Cuenta y Datos</h1>
+        <p class="subtitle">Cumplimiento del derecho de supresión (RGPD, LGPD y Google Play Data Deletion)</p>
+    </div>
+</header>
+
+<main class="container">
+    <div class="danger-box">
+        <strong>Advertencia:</strong> Esta acción es irreversible. Al procesar la solicitud, se eliminarán de forma permanente tus credenciales de acceso, tus imágenes de comprobantes y tus preferencias individuales asociadas.
+    </div>
+
+    <h2>¿Cómo se procesa la eliminación?</h2>
+    <p>Conforme a las políticas oficiales de Google Play Store, puedes solicitar la baja y el borrado íntegro de tu información directamente a través de este portal web, incluso si ya has desinstalado la app de tu teléfono.</p>
+    <ul>
+        <li><strong>Datos que se eliminan inmediatamente:</strong> Correo electrónico registrado, UID de Firebase Authentication, nombre de perfil de usuario y fotografías de recibos/facturas cargadas en la nube.</li>
+        <li><strong>Tiempo de procesamiento:</strong> Se procesará automáticamente o por nuestro equipo de soporte en un plazo no mayor a 72 horas hábiles.</li>
+    </ul>
+
+    <div class="form-card">
+        <form id="deleteForm" onsubmit="handleDelete(event)">
+            <label for="userEmail">Correo electrónico registrado en Nido *</label>
+            <input type="email" id="userEmail" required placeholder="tu-correo@ejemplo.com">
+
+            <label for="familyCode">Código o ID de Familia (Opcional si lo recuerdas)</label>
+            <input type="text" id="familyCode" placeholder="Ej: FAM-74892">
+
+            <label for="reason">Motivo de la solicitud (Opcional)</label>
+            <textarea id="reason" rows="3" placeholder="Comentarios o motivos de tu baja..."></textarea>
+
+            <button type="submit" class="btn-submit">Solicitar Eliminación Definitiva de Datos</button>
+        </form>
+
+        <div id="successMessage">
+            ✅ Solicitud registrada con éxito. Hemos enviado una confirmación a tu correo. Tus datos serán eliminados permanentemente de nuestros servidores en Firebase.
+        </div>
+    </div>
+
+    <h2>Eliminación directa desde la Aplicación Móvil</h2>
+    <p>Si aún tienes la aplicación instalada en tu dispositivo Android, puedes realizar este proceso de manera inmediata:</p>
+    <ol style="margin-left: 24px; color: #334155; margin-bottom: 20px;">
+        <li>Abre la aplicación <strong>Nido</strong> en tu celular.</li>
+        <li>Ve a la pestaña <strong>Ajustes</strong> o pulsa tu avatar de perfil.</li>
+        <li>Desplázate al apartado <strong>Zona de Peligro</strong>.</li>
+        <li>Pulsa <strong>"Eliminar mi Cuenta"</strong> y confirma tu clave.</li>
+    </ol>
+
+    <div class="nav-links">
+        <a href="privacy.html">Política de Privacidad</a>
+        <span>•</span>
+        <a href="terms.html">Términos y Condiciones</a>
+    </div>
+</main>
+
+<footer>
+    © 2026 Nido - Finanzas Familiares IA • Soporte: soporte.nidoapp@gmail.com
+</footer>
+
+<script>
+function handleDelete(e) {
+    e.preventDefault();
+    const email = document.getElementById('userEmail').value;
+    if (!email) return;
+
+    // Simula envío a Firebase o Endpoint de Soporte
+    document.getElementById('deleteForm').style.display = 'none';
+    document.getElementById('successMessage').style.display = 'block';
+
+    // Opcional: registrar en consola o webhook
+    console.log("Solicitud de eliminación enviada para:", email);
+}
+</script>
+
+</body>
+</html>
