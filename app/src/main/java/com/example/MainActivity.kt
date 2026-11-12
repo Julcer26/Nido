@@ -4766,6 +4766,52 @@ fun ConfigMainContent(
             }
         }
     }
+
+    val dialogContext = androidx.compose.ui.platform.LocalContext.current
+    if (showDeleteAccountDialog) {
+        AlertDialog(
+            onDismissRequest = { 
+                showDeleteAccountDialog = false 
+                deleteAccountError = null
+            },
+            title = { Text("¿Eliminar tu Cuenta?", color = AlertRed, fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    Text("Esta acción es irreversible y permanente conforme a las políticas de Google Play. Se eliminarán tus credenciales de acceso, tus comprobantes en la nube y tus preferencias.")
+                    deleteAccountError?.let { err: String ->
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(err, color = AlertRed, fontSize = 12.sp)
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.deleteUserAccount(
+                            onSuccess = {
+                                showDeleteAccountDialog = false
+                                android.widget.Toast.makeText(dialogContext, "Cuenta eliminada correctamente", android.widget.Toast.LENGTH_LONG).show()
+                            },
+                            onError = { err: String ->
+                                deleteAccountError = err
+                            }
+                        )
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = AlertRed)
+                ) {
+                    Text("Sí, Eliminar Cuenta")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { 
+                    showDeleteAccountDialog = false 
+                    deleteAccountError = null
+                }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -4985,51 +5031,6 @@ fun ConfigTab(viewModel: FamilyViewModel) {
                 }
             },
             containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
-    }
-
-    if (showDeleteAccountDialog) {
-        AlertDialog(
-            onDismissRequest = { 
-                showDeleteAccountDialog = false 
-                deleteAccountError = null
-            },
-            title = { Text("¿Eliminar tu Cuenta?", color = AlertRed, fontWeight = FontWeight.Bold) },
-            text = {
-                Column {
-                    Text("Esta acción es irreversible y permanente conforme a las políticas de Google Play. Se eliminarán tus credenciales de acceso, tus comprobantes en la nube y tus preferencias.")
-                    deleteAccountError?.let { err ->
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Text(err, color = AlertRed, fontSize = 12.sp)
-                    }
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        viewModel.deleteUserAccount(
-                            onSuccess = {
-                                showDeleteAccountDialog = false
-                                android.widget.Toast.makeText(context, "Cuenta eliminada correctamente", android.widget.Toast.LENGTH_LONG).show()
-                            },
-                            onError = { err ->
-                                deleteAccountError = err
-                            }
-                        )
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = AlertRed)
-                ) {
-                    Text("Sí, Eliminar Cuenta")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { 
-                    showDeleteAccountDialog = false 
-                    deleteAccountError = null
-                }) {
-                    Text("Cancelar")
-                }
-            }
         )
     }
 }

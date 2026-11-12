@@ -488,6 +488,7 @@ class FamilyViewModel(
         }
     }
     fun editNote(note: Note) { viewModelScope.launch { repository.insertNote(note, _currentUser.value) } }
+    fun deleteNote(note: Note) { viewModelScope.launch { repository.deleteNote(note, _currentUser.value) } }
     fun deleteUserAccount(onSuccess: () -> Unit, onError: (String) -> Unit) {
         viewModelScope.launch {
             try {
